@@ -1,0 +1,46 @@
+appId: com.iventello.stock-app
+productName: Gestion Stock & Caisse
+publish:
+  provider: github
+  owner: YOUR_GITHUB_USERNAME
+  repo: YOUR_REPO_NAME
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+
+asar: true
+asarUnpack:
+  - "@prisma/client/**"
+  - "@prisma/engines/**"
+  - ".prisma/client/**"
+
+extraResources:
+  - from: "node_modules/@prisma/engines/"
+    to: "prisma-engine/"
+    filter:
+      - "**/*.node"
+      - "**/*.so"
+      - "**/*.dll"
+      - "**/*.dylib"
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+
+mac:
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+    - portable

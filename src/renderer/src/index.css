@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Palette verte premium Iventello */
+    --background: 210 20% 98%;
+    --foreground: 220 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+    --primary: 152 60% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 152 30% 94%;
+    --secondary-foreground: 152 60% 25%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 12% 50%;
+    --accent: 152 40% 90%;
+    --accent-foreground: 152 60% 25%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 14% 91%;
+    --input: 220 14% 91%;
+    --ring: 152 60% 35%;
+    --radius: 5px;
+    --sidebar-bg: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 222 28% 7%;
+    --foreground: 210 20% 93%;
+    --card: 222 25% 10%;
+    --card-foreground: 210 20% 93%;
+    --popover: 222 25% 10%;
+    --popover-foreground: 210 20% 93%;
+    --primary: 152 55% 48%;
+    --primary-foreground: 222 28% 7%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 210 20% 93%;
+    --muted: 222 20% 14%;
+    --muted-foreground: 210 12% 55%;
+    --accent: 222 20% 18%;
+    --accent-foreground: 210 20% 93%;
+    --destructive: 0 62% 42%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 18% 18%;
+    --input: 222 18% 18%;
+    --ring: 152 55% 48%;
+    --sidebar-bg: 222 28% 9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  .dark .glass {
+    background: rgba(20, 25, 35, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .stat-card-green {
+    background: linear-gradient(135deg, hsl(152 60% 35%) 0%, hsl(152 55% 28%) 100%);
+    color: white;
+  }
+  .stat-card-slate {
+    background: linear-gradient(135deg, hsl(220 25% 30%) 0%, hsl(220 25% 22%) 100%);
+    color: white;
+  }
+  .stat-card-indigo {
+    background: linear-gradient(135deg, hsl(240 50% 42%) 0%, hsl(240 50% 32%) 100%);
+    color: white;
+  }
+  .stat-card-amber {
+    background: linear-gradient(135deg, hsl(38 92% 48%) 0%, hsl(38 92% 38%) 100%);
+    color: white;
+  }
+  .stat-card-rose {
+    background: linear-gradient(135deg, hsl(350 80% 54%) 0%, hsl(350 80% 44%) 100%);
+    color: white;
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-in {
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  /* Scrollbar fine */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+}

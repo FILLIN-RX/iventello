@@ -1,0 +1,210 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Warehouse {
+  id                 String             @id @default(uuid())
+  name               String
+  location           String?
+  logoUrl            String?
+  mobileMoneyEnabled Boolean            @default(false)
+  stocks             Stock[]
+  sales              Sale[]
+  cashTransactions   CashTransaction[]
+  mobileMoneyCells   MobileMoneyCell[]
+  canalPlusCells     CanalPlusCell[]
+}
+
+model Supplier {
+  id        String    @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  sales     Sale[]
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id                String    @id @default(uuid())
+  barcode           String    @unique
+  name              String
+  basePrice         Float
+  sellingPrice      Float
+  vatRate           Float     @default(19.25)
+  imageUrl          String?
+  createdAt         DateTime  @default(now())
+
+  field1_label      String?   @default("Marque")
+  field1_value      String?
+  field2_label      String?   @default("Modèle")
+  field2_value      String?
+  field3_label      String?   @default("Couleur")
+  field3_value      String?
+  field4_label      String?   @default("Taille/Dimension")
+  field4_value      String?
+  field5_label      String?   @default("Poids")
+  field5_value      String?
+  field6_label      String?   @default("Date d'expiration")
+  field6_value      String?
+  field7_label      String?   @default("Garantie (mois)")
+  field7_value      String?
+  field8_label      String?   @default("Numéro de lot")
+  field8_value      String?
+  field9_label      String?   @default("Conditionnement")
+  field9_value      String?
+  field10_label     String?   @default("Note interne")
+  field10_value     String?
+
+  supplierId        String?
+  supplier          Supplier? @relation(fields: [supplierId], references: [id])
+
+  categoryId        String?
+  category          Category? @relation(fields: [categoryId], references: [id])
+
+  stocks            Stock[]
+  saleItems         SaleItem[]
+  cashTransactionLines CashTransactionLine[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  title       String
+  amount      Float
+  category    String
+  date        DateTime @default(now())
+  description String?
+}
+
+model Stock {
+  id             String   @id @default(uuid())
+  productId      String
+  warehouseId    String
+  quantity       Int      @default(0)
+  alertLimit     Int      @default(5)
+  shelfLocation  String?
+
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse      Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId])
+}
+
+model Sale {
+  id            String     @id @default(uuid())
+  warehouseId   String
+  clientId      String?
+  subTotal      Float
+  vatTotal      Float
+  discount      Float      @default(0)
+  finalTotal    Float
+  paymentMethod String
+  createdAt     DateTime   @default(now())
+
+  warehouse     Warehouse  @relation(fields: [warehouseId], references: [id])
+  client        Client?    @relation(fields: [clientId], references: [id])
+  items         SaleItem[]
+}
+
+model SaleItem {
+  id        String  @id @default(uuid())
+  saleId    String
+  productId String
+  quantity  Int
+  unitPrice Float
+
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model CashTransaction {
+  id            String               @id @default(uuid())
+  type          String               // 'ENTREE' | 'SORTIE'
+  totalAmount   Float
+  paymentMethod String               // 'ESPECES' | 'CARTE_BANCAIRE' | 'MOBILE_MONEY' | 'VIREMENT'
+  description   String?
+  warehouseId   String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
+  lines         CashTransactionLine[]
+}
+
+model CashTransactionLine {
+  id            String          @id @default(uuid())
+  transactionId String
+  productId     String
+  quantity      Int
+  unitPrice     Float
+  subTotal      Float
+
+  transaction   CashTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product       Product         @relation(fields: [productId], references: [id])
+}
+
+model AppSettings {
+  id                String   @id @default(uuid())
+  companyName       String   @default("Mon Entreprise")
+  companyNui        String?
+  companyBp         String?
+  companyAddress    String?
+  companyPhones     String?
+  companyEmail      String?
+  companyLogo       String?
+  companyDescription String?
+  invoiceFooter     String?
+  updatedAt         DateTime @updatedAt
+}
+
+model MobileMoneyCell {
+  id          String  @id @default(uuid())
+  warehouseId String
+  month       String  // "2026-05"
+  day         Int     // 1-31
+  col         String  // soldeOM | soldeMTN | soldeCamtel | commissionOM | commissionMTN | commissionCamtel | deficit
+  value       Float   @default(0)
+
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, month, day, col])
+}
+
+model CanalPlusCell {
+  id          String  @id @default(uuid())
+  warehouseId String
+  month       String  // "2026-06"
+  day         Int     // 1-31
+  col         String  // reabonnementAccess, reabonnementEvasion, reabonnementAccessPlus, reabonnementToutCanal, reabonnementOthers, abonnement, achatDecoder, installationDepannage, commission
+  value       Float   @default(0)
+
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, month, day, col])
+}
+
