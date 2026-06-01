@@ -17,16 +17,45 @@ import { createMobileMoneyService } from './services/mobileMoneyService'
 import { createCanalPlusService } from './services/canalPlusService'
 import { createAppSettingsService } from './services/appSettingsService'
 import { createMonthlyReportService } from './services/monthlyReportService'
+import { exportRapportExcel, exportMobileMoneyExcel, exportCanalPlusExcel } from './services/excelExportService'
+import { initAutoUpdater } from './services/autoUpdaterService'
 
 let prisma: PrismaClient | null = null
 let mainWindow: BrowserWindow | null = null
 
 async function initDatabase(): Promise<void> {
   const userDataPath = app.getPath('userData')
+  if (!existsSync(userDataPath)) {
+    mkdirSync(userDataPath, { recursive: true })
+  }
   const dbPath = join(userDataPath, 'database.db')
+  
+  // En production, on doit indiquer à Prisma où se trouve l'engine
+  // car il ne peut pas être exécuté depuis l'archive ASAR.
+  if (app.isPackaged) {
+    const platform = process.platform
+    let engineName = ''
+    if (platform === 'win32') engineName = 'query_engine-windows.dll.node'
+    else if (platform === 'darwin') engineName = 'query_engine-darwin.dylib.node'
+    else engineName = 'query_engine-debian-openssl-3.0.x.so.node' // ou linux-musl selon l'env
+
+    // Le chemin vers l'engine déballé par electron-builder (asarUnpack)
+    const enginePath = join(
+      process.resourcesPath,
+      'app.asar.unpacked',
+      'node_modules',
+      '@prisma',
+      'engines',
+      engineName
+    )
+    process.env.PRISMA_QUERY_ENGINE_LIBRARY = enginePath
+  }
+
   process.env.DATABASE_URL = `file:${dbPath}`
 
-  prisma = new PrismaClient({ log: ['warn', 'error'] })
+  prisma = new PrismaClient({
+    log: ['warn', 'error'],
+  })
 
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Warehouse" (
@@ -405,11 +434,15 @@ function registerIpcHandlers(): void {
   // Mobile Money
   ipcMain.handle('db:get-mobile-money-cells', (_e, wid: string, month: string) => mobileMoneyService.getCells(wid, month))
   ipcMain.handle('db:save-mobile-money-cells', (_e, wid: string, month: string, cells) => mobileMoneyService.saveCells(wid, month, cells))
-  ipcMain.handle('export:mobile-money-excel', (_e, wid: string, month: string, data) => mobileMoneyService.exportExcel(wid, month, data))
 
   // Canal+
   ipcMain.handle('db:get-canal-plus-cells', (_e, wid: string, month: string) => canalPlusService.getCells(wid, month))
   ipcMain.handle('db:save-canal-plus-cells', (_e, wid: string, month: string, cells) => canalPlusService.saveCells(wid, month, cells))
+
+  // Export Excel stylisé (via exceljs)
+  ipcMain.handle('export:rapport-excel', async (_e, params) => exportRapportExcel(params))
+  ipcMain.handle('export:mobile-money-excel', async (_e, params) => exportMobileMoneyExcel(params))
+  ipcMain.handle('export:canal-plus-excel', async (_e, params) => exportCanalPlusExcel(params))
 
   // Export PDF générique (tableau HTML → PDF)
   ipcMain.handle('export:table-pdf', async (_e, html: string, filename: string) => {
@@ -438,6 +471,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  initAutoUpdater(mainWindow)
 }
 
 protocol.registerSchemesAsPrivileged([

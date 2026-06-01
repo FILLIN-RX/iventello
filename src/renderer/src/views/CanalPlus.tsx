@@ -4,7 +4,6 @@ import { useEntrepotStore } from '../stores/entrepotStore'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { cn } from '@/lib/utils'
-import * as XLSX from 'xlsx'
 
 const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
@@ -139,31 +138,14 @@ export function CanalPlus() {
     }))
 
     try {
-      const ws = XLSX.utils.json_to_sheet(exportRows.map((r) => ({
-        'Date': `Jour ${r.day}`,
-        'Réab. Access': r.reabonnementAccess,
-        'Réab. Évasion': r.reabonnementEvasion,
-        'Réab. Access+': r.reabonnementAccessPlus,
-        'Réab. Tout Canal': r.reabonnementToutCanal,
-        'Réab. Autres': r.reabonnementOthers,
-        'Total Réabonnements': r.totalReabonnement,
-        'Abonnement': r.abonnement,
-        'Achat Décodeur': r.achatDecoder,
-        'Install./Dépannage': r.installationDepannage,
-        'Commission': r.commission,
-      })))
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, `${MONTH_NAMES[currentTab.month - 1]} ${currentTab.year}`)
-      const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
-      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `CanalPlus_${key}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
+      await window.api.exportCanalPlusExcel({
+        month: key,
+        monthName: MONTH_NAMES[currentTab.month - 1],
+        warehouseName: selectedName ?? '',
+        rows: exportRows,
+      })
     } catch (err) {
-      console.error('Export error', err)
+      console.error('Export Excel error', err)
     }
   }
 

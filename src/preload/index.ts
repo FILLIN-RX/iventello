@@ -49,13 +49,21 @@ const api = {
   // Mobile Money
   getMobileMoneyCells: (warehouseId: string, month: string) => ipcRenderer.invoke('db:get-mobile-money-cells', warehouseId, month),
   saveMobileMoneyCells: (warehouseId: string, month: string, cells: unknown) => ipcRenderer.invoke('db:save-mobile-money-cells', warehouseId, month, cells),
-  exportMobileMoneySheet: (warehouseId: string, month: string, data: unknown) => ipcRenderer.invoke('export:mobile-money-excel', warehouseId, month, data),
   getCanalPlusCells: (warehouseId: string, month: string) => ipcRenderer.invoke('db:get-canal-plus-cells', warehouseId, month),
   saveCanalPlusCells: (warehouseId: string, month: string, cells: unknown) => ipcRenderer.invoke('db:save-canal-plus-cells', warehouseId, month, cells),
+  exportRapportExcel: (params: unknown) => ipcRenderer.invoke('export:rapport-excel', params),
+  exportMobileMoneyExcel: (params: unknown) => ipcRenderer.invoke('export:mobile-money-excel', params),
+  exportCanalPlusExcel: (params: unknown) => ipcRenderer.invoke('export:canal-plus-excel', params),
   getAppSettings: () => ipcRenderer.invoke('db:get-app-settings'),
   updateAppSettings: (data: unknown) => ipcRenderer.invoke('db:update-app-settings', data),
   getMonthlyReport: (warehouseId: string, year: number, month: number) => ipcRenderer.invoke('db:get-monthly-report', warehouseId, year, month),
   exportTablePdf: (html: string, filename: string) => ipcRenderer.invoke('export:table-pdf', html, filename),
+  // Updates
+  checkForUpdates: () => ipcRenderer.send('update:check'),
+  installUpdate: () => ipcRenderer.send('update:install'),
+  onUpdateAvailable: (callback: () => void) => ipcRenderer.on('update:available', () => callback()),
+  onUpdateDownloaded: (callback: () => void) => ipcRenderer.on('update:downloaded', () => callback()),
+  onUpdateError: (callback: (error: any) => void) => ipcRenderer.on('update:error', (_e, err) => callback(err)),
 }
 
 contextBridge.exposeInMainWorld('api', api)

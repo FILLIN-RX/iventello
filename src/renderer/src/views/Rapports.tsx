@@ -4,7 +4,6 @@ import { useEntrepotStore } from '../stores/entrepotStore'
 import { Button } from '../components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/utils'
-import * as XLSX from 'xlsx'
 
 const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
@@ -86,38 +85,22 @@ export default function Rapports() {
 
   async function handleExport() {
     if (!data) return
-    const rows: any[] = []
-    if (tab === 'ventes') {
-      for (let d = 1; d <= days; d++) {
-        const row: any = { 'Jour': d }
-        for (const cat of data.categories) row[cat] = data.salesByDay[d]?.[cat] ?? 0
-        row['Total'] = totalSalesDay(d)
-        rows.push(row)
-      }
-      const totalRow: any = { 'Jour': 'TOTAL' }
-      for (const cat of data.categories) totalRow[cat] = total(cat)
-      totalRow['Total'] = total('__total')
-      rows.push(totalRow)
-    } else {
-      for (let d = 1; d <= days; d++) {
-        const val = tab === 'depenses' ? (data.expensesByDay[d] ?? 0)
-          : tab === 'achats' ? (data.purchasesByDay[d] ?? 0)
-          : (data.discountsByDay[d] ?? 0)
-        rows.push({ 'Jour': d, 'Montant': val })
-      }
-      rows.push({ 'Jour': 'TOTAL', 'Montant': total(tab) })
+    try {
+      await window.api.exportRapportExcel({
+        tab,
+        year,
+        month,
+        monthName: MONTH_NAMES[month - 1],
+        warehouseName: selectedName ?? '',
+        categories: data.categories,
+        salesByDay: data.salesByDay,
+        expensesByDay: data.expensesByDay,
+        purchasesByDay: data.purchasesByDay,
+        discountsByDay: data.discountsByDay,
+      })
+    } catch (err) {
+      console.error('Export Excel error', err)
     }
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, `${TABS.find((t) => t.id === tab)?.label} ${MONTH_NAMES[month - 1]} ${year}`)
-    const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Rapport_${tab}_${MONTH_NAMES[month - 1]}_${year}.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   async function handleExportPdf() {

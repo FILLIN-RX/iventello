@@ -22,6 +22,7 @@ import Caisse from './views/Caisse'
 import CahierCaisse from './views/CahierCaisse'
 import { MobileMoneySheet } from './views/MobileMoneySheet'
 import { CanalPlus } from './views/CanalPlus'
+import { UpdateNotifier } from './components/UpdateNotifier'
 import Factures from './views/Factures'
 import Achats from './views/Achats'
 import Depenses from './views/Depenses'
@@ -161,6 +162,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background" style={{ fontFamily: "'Poppins', sans-serif" }}>
+      <UpdateNotifier />
       {/* Sidebar */}
       <aside className={`${sidebarOpen ? 'w-60' : 'w-0'} flex flex-shrink-0 flex-col border-r bg-card shadow-sm transition-all duration-200 overflow-hidden`}>
         {/* Logo */}

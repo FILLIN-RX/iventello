@@ -273,7 +273,7 @@ export interface ElectronApi {
   // Mobile Money
   getMobileMoneyCells: (warehouseId: string, month: string) => Promise<MobileMoneyCell[]>
   saveMobileMoneyCells: (warehouseId: string, month: string, cells: { day: number; col: string; value: number }[]) => Promise<void>
-  exportMobileMoneySheet: (warehouseId: string, month: string, data: MobileMoneyExportRow[]) => Promise<string>
+  exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
   // AppSettings
   getAppSettings: () => Promise<AppSettings>
   updateAppSettings: (data: Partial<Omit<AppSettings, 'id' | 'updatedAt'>>) => Promise<AppSettings>
@@ -287,7 +287,17 @@ export interface ElectronApi {
   // Canal+
   getCanalPlusCells: (warehouseId: string, month: string) => Promise<CanalPlusCell[]>
   saveCanalPlusCells: (warehouseId: string, month: string, cells: { day: number; col: string; value: number }[]) => Promise<void>
+  // Exports Excel stylisés
+  exportRapportExcel: (params: ExportRapportParams) => Promise<string>
+  exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
+  exportCanalPlusExcel: (params: ExportCanalPlusParams) => Promise<string>
   exportTablePdf: (html: string, filename: string) => Promise<string>
+  // Updates
+  checkForUpdates: () => void
+  installUpdate: () => void
+  onUpdateAvailable: (callback: () => void) => void
+  onUpdateDownloaded: (callback: () => void) => void
+  onUpdateError: (callback: (error: any) => void) => void
 }
 
 export interface AppSettings {
@@ -313,20 +323,6 @@ export interface MobileMoneyCell {
   value: number
 }
 
-export interface MobileMoneyExportRow {
-  day: number
-  soldeOM: number
-  soldeMTN: number
-  soldeCamtel: number
-  commissionOM: number
-  commissionMTN: number
-  commissionCamtel: number
-  deficit: number
-  totalSoldes: number
-  totalCommissions: number
-  soldeReelAjuste: number
-}
-
 export interface CanalPlusCell {
   id: string
   warehouseId: string
@@ -347,4 +343,55 @@ export interface CanalPlusDayRow {
   achatDecoder: number
   installationDepannage: number
   commission: number
+}
+
+export interface ExportRapportParams {
+  tab: string
+  year: number
+  month: number
+  monthName: string
+  warehouseName: string
+  categories: string[]
+  salesByDay: Record<number, Record<string, number>>
+  expensesByDay: Record<number, number>
+  purchasesByDay: Record<number, number>
+  discountsByDay: Record<number, number>
+}
+
+export interface ExportMobileMoneyParams {
+  month: string
+  monthName: string
+  warehouseName: string
+  rows: {
+    day: number
+    soldeOM: number
+    soldeMTN: number
+    soldeCamtel: number
+    commissionOM: number
+    commissionMTN: number
+    commissionCamtel: number
+    deficit: number
+    totalSoldes: number
+    totalCommissions: number
+    soldeReelAjuste: number
+  }[]
+}
+
+export interface ExportCanalPlusParams {
+  month: string
+  monthName: string
+  warehouseName: string
+  rows: {
+    day: number
+    reabonnementAccess: number
+    reabonnementEvasion: number
+    reabonnementAccessPlus: number
+    reabonnementToutCanal: number
+    reabonnementOthers: number
+    totalReabonnement: number
+    abonnement: number
+    achatDecoder: number
+    installationDepannage: number
+    commission: number
+  }[]
 }
