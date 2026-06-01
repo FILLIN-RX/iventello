@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { FileText, Printer, User, Building2, CreditCard, Hash } from 'lucide-react'
+import { Printer, User, Building2, CreditCard, Hash } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   Dialog,
@@ -7,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog'
-import type { SaleWithClient, AppSettings } from '../../../shared/types'
+import type { SaleWithClient } from '../../../shared/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface Props {
@@ -22,15 +21,10 @@ const PAYMENT_LABELS: Record<string, string> = {
 }
 
 export function FactureDetailModal({ open, onClose, sale }: Props) {
-  const [settings, setSettings] = useState<AppSettings | null>(null)
-
-  useEffect(() => {
-    if (open) window.api.getAppSettings().then(setSettings)
-  }, [open])
-
   if (!sale) return null
 
-  const logoUrl = settings?.companyLogo
+  const wh = sale.warehouse
+  const logoUrl = wh.invoiceCompanyLogo
   const items = (sale as any).items as ({ product: { id: string; name: string; barcode: string } } & { quantity: number; unitPrice: number })[]
   const vatTotal = sale.vatTotal ?? 0
   const discount = sale.discount ?? 0
@@ -62,7 +56,7 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
+            <Printer className="h-5 w-5 text-primary" />
             Facture détaillée
           </DialogTitle>
         </DialogHeader>
@@ -77,16 +71,16 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
             />
           )}
           <div>
-            <p className="font-bold text-sm">{settings?.companyName ?? 'Mon Entreprise'}</p>
-            {settings?.companyDescription && <p className="text-xs text-muted-foreground italic">{settings.companyDescription}</p>}
+            <p className="font-bold text-sm">{wh.invoiceCompanyName || wh.name || 'Mon Entreprise'}</p>
+            {wh.invoiceCompanyDescription && <p className="text-xs text-muted-foreground italic">{wh.invoiceCompanyDescription}</p>}
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-              {settings?.companyNui && <span>NUI: {settings.companyNui}</span>}
-              {settings?.companyBp && <span>BP: {settings.companyBp}</span>}
+              {wh.invoiceCompanyNui && <span>NUI: {wh.invoiceCompanyNui}</span>}
+              {wh.invoiceCompanyBp && <span>BP: {wh.invoiceCompanyBp}</span>}
             </div>
-            {settings?.companyAddress && <p className="text-xs text-muted-foreground">{settings.companyAddress}</p>}
+            {wh.invoiceCompanyAddress && <p className="text-xs text-muted-foreground">{wh.invoiceCompanyAddress}</p>}
             <div className="flex flex-col gap-0.5 text-xs text-muted-foreground mt-0.5">
-              {settings?.companyPhones?.split('\n').filter(Boolean).map((tel, i) => <span key={i}>{tel}</span>)}
-              {settings?.companyEmail && <span>{settings.companyEmail}</span>}
+              {wh.invoiceCompanyPhones?.split('\n').filter(Boolean).map((tel, i) => <span key={i}>{tel}</span>)}
+              {wh.invoiceCompanyEmail && <span>{wh.invoiceCompanyEmail}</span>}
             </div>
           </div>
         </div>
@@ -112,7 +106,7 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{sale.warehouse.name}</span>
+            <span>{wh.name}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
@@ -171,9 +165,9 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
         </div>
 
         {/* Pied de page */}
-        {settings?.invoiceFooter && (
+        {wh.invoiceFooter && (
           <p className="text-xs text-muted-foreground text-center border-t pt-3">
-            {settings.invoiceFooter}
+            {wh.invoiceFooter}
           </p>
         )}
 

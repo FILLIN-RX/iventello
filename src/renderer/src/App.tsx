@@ -4,8 +4,8 @@ import {
   ShoppingCart, FileText, ShoppingBag, Wallet, Users,
   BarChart3, Activity, Truck, Warehouse as WarehouseIcon,
   Bell, BellDot, ChevronDown, Moon, Sun, Home, Settings as SettingsIcon,
-  ArrowLeft, Plus, Receipt, Smartphone, Satellite,
-  CheckCheck, X, Info, AlertOctagon, ShoppingCart as CartIcon
+  ArrowLeft, Plus, Receipt, Smartphone, Satellite, Percent,
+  CheckCheck, X, Info, AlertOctagon, ShoppingCart as CartIcon,
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import { useEntrepotStore } from './stores/entrepotStore'
@@ -23,9 +23,11 @@ import CahierCaisse from './views/CahierCaisse'
 import { MobileMoneySheet } from './views/MobileMoneySheet'
 import { CanalPlus } from './views/CanalPlus'
 import { UpdateNotifier } from './components/UpdateNotifier'
+import { FloatingActions } from './components/FloatingActions'
 import Factures from './views/Factures'
 import Achats from './views/Achats'
 import Depenses from './views/Depenses'
+import Remises from './views/Remises'
 import Clients from './views/Clients'
 import Rapports from './views/Rapports'
 import ActivityLog from './views/ActivityLog'
@@ -39,6 +41,7 @@ type WorkspaceView =
   | 'dashboard' | 'produits' | 'categories'
   | 'stock-faible' | 'rupture' | 'caisse'
   | 'cahier-caisse' | 'factures' | 'achats' | 'depenses'
+  | 'remises'
   | 'clients' | 'rapports' | 'journal'
   | 'fournisseurs'
   | 'canal-plus'
@@ -61,6 +64,7 @@ const workspaceNav: NavItem[] = [
   { id: 'factures', label: 'Factures', icon: FileText, group: 'commercial' },
   { id: 'achats', label: 'Achats', icon: ShoppingBag, group: 'commercial' },
   { id: 'depenses', label: 'Dépenses', icon: Wallet, group: 'commercial' },
+  { id: 'remises', label: 'Remises', icon: Percent, group: 'commercial' },
   { id: 'clients', label: 'Clients', icon: Users, group: 'relations' },
   { id: 'fournisseurs', label: 'Fournisseurs', icon: Truck, group: 'relations' },
   { id: 'rapports', label: 'Rapports', icon: BarChart3, group: 'analyse' },
@@ -79,7 +83,7 @@ const VIEW_TITLES: Record<string, string> = {
   dashboard: 'Tableau de bord', produits: 'Produits', categories: 'Catégories',
   'stock-faible': 'Stock faible', rupture: 'Rupture de stock', caisse: 'Ventes',
   'cahier-caisse': 'Cahier de caisse', 'mobile-money': 'Mobile Money', factures: 'Factures', achats: 'Achats', depenses: 'Dépenses',
-  clients: 'Clients', rapports: 'Rapports', journal: "Journal d'activité",
+  clients: 'Clients', remises: 'Remises', rapports: 'Rapports', journal: "Journal d'activité",
   fournisseurs: 'Fournisseurs',
   'canal-plus': 'Canal+',
 }
@@ -383,6 +387,7 @@ export default function App() {
               {workspaceView === 'factures' && <Factures />}
               {workspaceView === 'achats' && <Achats />}
               {workspaceView === 'depenses' && <Depenses />}
+              {workspaceView === 'remises' && <Remises />}
               {workspaceView === 'clients' && <Clients />}
               {workspaceView === 'rapports' && <Rapports />}
               {workspaceView === 'journal' && <ActivityLog />}
@@ -398,6 +403,7 @@ export default function App() {
             </>
           )}
         </main>
+        <FloatingActions onNavigate={(v) => setWorkspaceView(v as WorkspaceView)} />
       </div>
     </div>
   )

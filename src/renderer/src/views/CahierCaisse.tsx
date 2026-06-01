@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Plus, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown,
   Package, Search, X, Barcode, Wallet, Trash2, FileDown,
-  ShoppingCart, ShoppingBag, Landmark, Smartphone, CreditCard, Receipt
+  ShoppingCart, ShoppingBag, Landmark, Smartphone, CreditCard, Receipt,
+  Percent
 } from 'lucide-react'
 import { useEntrepotStore } from '../stores/entrepotStore'
 import { useCashRegisterStore } from '../stores/cashRegisterStore'
@@ -237,8 +238,9 @@ function CahierCaisse() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {transactions.map((t) => {
+                  {transactions.map((t) => {
                   const isEntree = t.type === 'ENTREE'
+                  const isRemise = t.description?.startsWith('Remise')
                   const firstLine = t.lines?.[0]
                   return (
                     <tr key={t.id} className="group transition-colors hover:bg-muted/30">
@@ -248,12 +250,14 @@ function CahierCaisse() {
                       <td className="px-4 py-3">
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                          isEntree
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                            : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                          isRemise
+                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400'
+                            : isEntree
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                              : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
                         )}>
-                          {isEntree ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                          {isEntree ? 'Entrée' : 'Sortie'}
+                          {isRemise ? <Percent className="h-3 w-3" /> : isEntree ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                          {isRemise ? 'Remise' : isEntree ? 'Entrée' : 'Sortie'}
                         </span>
                       </td>
                       <td className="px-4 py-3">

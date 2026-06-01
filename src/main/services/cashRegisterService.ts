@@ -7,7 +7,11 @@ export function createCashRegisterService(prisma: PrismaClient) {
       startOfDay.setHours(0, 0, 0, 0)
 
       const transactions = await prisma.cashTransaction.findMany({
-        where: { warehouseId, createdAt: { gte: startOfDay } },
+        where: {
+          warehouseId,
+          createdAt: { gte: startOfDay },
+          category: { not: 'CANAL_PLUS' }
+        },
         select: { type: true, totalAmount: true }
       })
 
@@ -37,6 +41,14 @@ export function createCashRegisterService(prisma: PrismaClient) {
       }
     },
 
+    async getCanalPlusBalance(warehouseId: string) {
+      const result = await prisma.cashTransaction.aggregate({
+        where: { warehouseId, category: 'CANAL_PLUS' },
+        _sum: { totalAmount: true }
+      })
+      return result._sum.totalAmount ?? 0
+    },
+
     async getTransactions(warehouseId: string) {
       return prisma.cashTransaction.findMany({
         where: { warehouseId },
@@ -54,6 +66,7 @@ export function createCashRegisterService(prisma: PrismaClient) {
       totalAmount: number
       paymentMethod: string
       description?: string
+      category?: string
       lines: { productId: string; quantity: number; unitPrice: number; subTotal: number }[]
     }) {
       const transaction = await prisma.cashTransaction.create({
@@ -62,6 +75,7 @@ export function createCashRegisterService(prisma: PrismaClient) {
           totalAmount: data.totalAmount,
           paymentMethod: data.paymentMethod,
           description: data.description ?? null,
+          category: data.category ?? 'GENERAL',
           warehouseId: data.warehouseId,
           lines: { create: data.lines }
         },
@@ -71,27 +85,28 @@ export function createCashRegisterService(prisma: PrismaClient) {
         }
       })
 
-      // Double impact stock
-      for (const line of data.lines) {
-        const stock = await prisma.stock.findFirst({
-          where: { productId: line.productId, warehouseId: data.warehouseId }
-        })
-        if (stock) {
-          const qtyChange = data.type === 'ENTREE' ? -line.quantity : line.quantity
-          await prisma.stock.update({
-            where: { id: stock.id },
-            data: { quantity: { increment: qtyChange } }
+      // Impact stock (sauf pour Canal+ qui n'affecte pas le stock physique)
+      if (data.category !== 'CANAL_PLUS') {
+        for (const line of data.lines) {
+          const stock = await prisma.stock.findFirst({
+            where: { productId: line.productId, warehouseId: data.warehouseId }
           })
-        } else if (data.type === 'SORTIE') {
-          // Achat : créer ligne de stock si elle n'existe pas
-          await prisma.stock.create({
-            data: {
-              productId: line.productId,
-              warehouseId: data.warehouseId,
-              quantity: line.quantity,
-              alertLimit: 5
-            }
-          })
+          if (stock) {
+            const qtyChange = data.type === 'ENTREE' ? -line.quantity : line.quantity
+            await prisma.stock.update({
+              where: { id: stock.id },
+              data: { quantity: { increment: qtyChange } }
+            })
+          } else if (data.type === 'SORTIE') {
+            await prisma.stock.create({
+              data: {
+                productId: line.productId,
+                warehouseId: data.warehouseId,
+                quantity: line.quantity,
+                alertLimit: 5
+              }
+            })
+          }
         }
       }
 

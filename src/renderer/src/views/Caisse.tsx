@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ShoppingCart, Plus, Minus, Trash2, Barcode, Printer, User } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, Trash2, Barcode, Printer, User, UserPlus } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 import { useWarehouses } from '../hooks/useWarehouses'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
@@ -38,12 +38,17 @@ function Caisse() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showClientSearch, setShowClientSearch] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [applyVat, setApplyVat] = useState(true)
   const [saleDone, setSaleDone] = useState(false)
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [lastSaleId, setLastSaleId] = useState('')
   const [printers, setPrinters] = useState<string[]>([])
   const [deviceModal, setDeviceModal] = useState<'scanner' | 'printer' | null>(null)
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientPhone, setNewClientPhone] = useState('')
+  const [newClientEmail, setNewClientEmail] = useState('')
   const { checkScanner, testScanner, testPrinter } = useDeviceCheck()
 
   useEffect(() => {
@@ -76,7 +81,7 @@ function Caisse() {
   }
 
   const subTotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
-  const vatTotal = subTotal * 0.1925
+  const vatTotal = applyVat ? subTotal * 0.1925 : 0
   const finalTotal = subTotal + vatTotal - discount
 
   async function searchClient(q: string) {
@@ -120,6 +125,20 @@ function Caisse() {
       else setDeviceModal('printer')
     } catch (err) { console.error('Erreur vente', err) }
     finally { setValidating(false) }
+  }
+
+  async function handleCreateClient() {
+    if (!newClientName.trim()) return
+    try {
+      const client = await window.api.createClient({ name: newClientName.trim(), phone: newClientPhone.trim() || undefined, email: newClientEmail.trim() || undefined })
+      setSelectedClient(client)
+      setShowNewClient(false)
+      setNewClientName('')
+      setNewClientPhone('')
+      setNewClientEmail('')
+      setClientSearch('')
+      setShowClientSearch(false)
+    } catch (err) { console.error('Erreur création client', err) }
   }
 
   async function handlePrint() {
@@ -188,28 +207,40 @@ function Caisse() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Client</Label>
-              {selectedClient ? (
-                <div className="flex items-center justify-between rounded-md border p-2 text-sm">
-                  <span className="flex items-center gap-2"><User className="h-3 w-3" />{selectedClient.name}</span>
-                  <Button variant="ghost" size="sm" onClick={() => { setSelectedClient(null); setClientSearch('') }}>X</Button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Input placeholder="Rechercher un client..." value={clientSearch} onChange={(e) => searchClient(e.target.value)} onFocus={() => setShowClientSearch(true)} />
-                  {showClientSearch && clients.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
-                      {clients.map((c) => (
-                        <button key={c.id} className="w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setSelectedClient(c); setShowClientSearch(false); setClientSearch('') }}>
-                          {c.name} {c.email && <span className="text-muted-foreground">— {c.email}</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              <div className="space-y-2">
+                <Label>Client</Label>
+                {selectedClient ? (
+                  <div className="flex items-center justify-between rounded-md border p-2 text-sm">
+                    <span className="flex items-center gap-2"><User className="h-3 w-3" />{selectedClient.name}</span>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedClient(null); setClientSearch('') }}>X</Button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Input placeholder="Rechercher un client..." value={clientSearch} onChange={(e) => searchClient(e.target.value)} onFocus={() => setShowClientSearch(true)} />
+                    {showClientSearch && (
+                      <>
+                        {clients.length > 0 && (
+                          <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
+                            {clients.map((c) => (
+                              <button key={c.id} className="w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setSelectedClient(c); setShowClientSearch(false); setClientSearch('') }}>
+                                {c.name} {c.email && <span className="text-muted-foreground">— {c.email}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {clientSearch.length >= 2 && clients.length === 0 && (
+                          <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg p-3 text-center">
+                            <p className="text-xs text-muted-foreground mb-2">Aucun client trouvé</p>
+                            <Button size="sm" variant="outline" onClick={() => { setShowNewClient(true); setNewClientName(clientSearch) }}>
+                              <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Créer "{clientSearch}"
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
             {items.length === 0 && <p className="text-center text-sm text-muted-foreground">Panier vide.</p>}
             {items.map((item) => (
@@ -239,6 +270,11 @@ function Caisse() {
               </Select>
             </div>
 
+            <div className="flex items-center gap-2">
+              <input id="applyVat" type="checkbox" checked={applyVat} onChange={(e) => setApplyVat(e.target.checked)} className="h-4 w-4 rounded border-muted text-primary focus:ring-primary" />
+              <Label htmlFor="applyVat" className="text-sm cursor-pointer">Appliquer TVA (19.25%)</Label>
+            </div>
+
             {discount > 0 && (
               <div className="space-y-1">
                 <Label>Remise</Label>
@@ -250,7 +286,7 @@ function Caisse() {
           <CardFooter className="flex-col gap-3">
             <div className="w-full space-y-1 text-sm">
               <div className="flex justify-between"><span>Sous-total</span><span>{formatCurrency(subTotal)}</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>TVA (19.25%)</span><span>{formatCurrency(vatTotal)}</span></div>
+              {applyVat && <div className="flex justify-between text-muted-foreground"><span>TVA (19.25%)</span><span>{formatCurrency(vatTotal)}</span></div>}
               {discount > 0 && <div className="flex justify-between text-destructive"><span>Remise</span><span>-{formatCurrency(discount)}</span></div>}
               <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total</span><span>{formatCurrency(finalTotal)}</span></div>
             </div>
@@ -280,6 +316,32 @@ function Caisse() {
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setShowPrintDialog(false)}>Annuler</Button>
                 <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4" />Imprimer</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showNewClient} onOpenChange={setShowNewClient}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><UserPlus className="h-4 w-4" /> Nouveau client</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Nom *</Label>
+                <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Nom du client" autoFocus />
+              </div>
+              <div>
+                <Label>Téléphone</Label>
+                <Input value={newClientPhone} onChange={(e) => setNewClientPhone(e.target.value)} placeholder="+237 6XX XXX XXX" />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="client@email.com" type="email" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setShowNewClient(false)}>Annuler</Button>
+                <Button onClick={handleCreateClient} disabled={!newClientName.trim()}>Créer et sélectionner</Button>
               </div>
             </div>
           </DialogContent>

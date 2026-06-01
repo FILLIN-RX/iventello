@@ -13,11 +13,25 @@ model Warehouse {
   location           String?
   logoUrl            String?
   mobileMoneyEnabled Boolean            @default(false)
+
+  // Invoice settings (per warehouse)
+  invoiceCompanyName       String?
+  invoiceCompanyNui        String?
+  invoiceCompanyBp         String?
+  invoiceCompanyAddress    String?
+  invoiceCompanyPhones     String?
+  invoiceCompanyEmail      String?
+  invoiceCompanyLogo       String?
+  invoiceCompanyDescription String?
+  invoiceFooter            String?
+
   stocks             Stock[]
   sales              Sale[]
   cashTransactions   CashTransaction[]
   mobileMoneyCells   MobileMoneyCell[]
   canalPlusCells     CanalPlusCell[]
+  canalPlusSales     CanalPlusSale[]
+  discounts          Discount[]
 }
 
 model Supplier {
@@ -129,6 +143,7 @@ model Sale {
   warehouse     Warehouse  @relation(fields: [warehouseId], references: [id])
   client        Client?    @relation(fields: [clientId], references: [id])
   items         SaleItem[]
+  discounts     Discount[]
 }
 
 model SaleItem {
@@ -148,6 +163,7 @@ model CashTransaction {
   totalAmount   Float
   paymentMethod String               // 'ESPECES' | 'CARTE_BANCAIRE' | 'MOBILE_MONEY' | 'VIREMENT'
   description   String?
+  category      String               @default("GENERAL") // 'GENERAL' | 'CANAL_PLUS'
   warehouseId   String
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
@@ -166,6 +182,18 @@ model CashTransactionLine {
 
   transaction   CashTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   product       Product         @relation(fields: [productId], references: [id])
+}
+
+model Discount {
+  id          String   @id @default(uuid())
+  saleId      String
+  warehouseId String
+  amount      Float
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  sale        Sale      @relation(fields: [saleId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 }
 
 model AppSettings {
@@ -206,5 +234,19 @@ model CanalPlusCell {
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([warehouseId, month, day, col])
+}
+
+model CanalPlusSale {
+  id                 String   @id @default(uuid())
+  warehouseId        String
+  clientName         String
+  subscriptionNumber String
+  phone              String
+  formule            String
+  amount             Float
+  invoicePath        String?
+  createdAt          DateTime @default(now())
+
+  warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
 }
 

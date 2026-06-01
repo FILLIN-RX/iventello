@@ -14,7 +14,7 @@ export function createWarehouseService(prisma: PrismaClient) {
       return prisma.warehouse.create({ data })
     },
 
-    async update(id: string, data: Partial<{ name: string; location: string; logoUrl: string; mobileMoneyEnabled: boolean }>) {
+    async update(id: string, data: Record<string, unknown>) {
       return prisma.warehouse.update({ where: { id }, data })
     },
 

@@ -122,6 +122,15 @@ export interface Warehouse {
   location: string | null
   logoUrl: string | null
   mobileMoneyEnabled: boolean
+  invoiceCompanyName: string | null
+  invoiceCompanyNui: string | null
+  invoiceCompanyBp: string | null
+  invoiceCompanyAddress: string | null
+  invoiceCompanyPhones: string | null
+  invoiceCompanyEmail: string | null
+  invoiceCompanyLogo: string | null
+  invoiceCompanyDescription: string | null
+  invoiceFooter: string | null
 }
 
 export interface StockAlert {
@@ -216,9 +225,24 @@ export interface ElectronApi {
   getSales: (clientId?: string) => Promise<SaleWithClient[]>
   getWarehouses: () => Promise<Warehouse[]>
   createWarehouse: (data: { name: string; location?: string; logoUrl?: string; mobileMoneyEnabled?: boolean }) => Promise<Warehouse>
-  updateWarehouse: (id: string, data: Partial<{ name: string; location: string; logoUrl: string; mobileMoneyEnabled: boolean }>) => Promise<Warehouse>
+  updateWarehouse: (id: string, data: Partial<{
+    name: string
+    location: string
+    logoUrl: string
+    mobileMoneyEnabled: boolean
+    invoiceCompanyName: string | null
+    invoiceCompanyNui: string | null
+    invoiceCompanyBp: string | null
+    invoiceCompanyAddress: string | null
+    invoiceCompanyPhones: string | null
+    invoiceCompanyEmail: string | null
+    invoiceCompanyLogo: string | null
+    invoiceCompanyDescription: string | null
+    invoiceFooter: string | null
+  }>) => Promise<Warehouse>
   selectLogo: () => Promise<string | null>
   saveLogo: (sourcePath: string, warehouseId: string) => Promise<string>
+  saveInvoiceLogo: (sourcePath: string, warehouseId: string) => Promise<string>
   saveProductImage: (sourcePath: string, productId: string) => Promise<string>
   deleteWarehouse: (id: string) => Promise<void>
   getStockAlerts: () => Promise<StockAlert[]>
@@ -274,6 +298,9 @@ export interface ElectronApi {
   getMobileMoneyCells: (warehouseId: string, month: string) => Promise<MobileMoneyCell[]>
   saveMobileMoneyCells: (warehouseId: string, month: string, cells: { day: number; col: string; value: number }[]) => Promise<void>
   exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
+  // Remises
+  getDiscounts: (warehouseId?: string) => Promise<DiscountWithSale[]>
+
   // AppSettings
   getAppSettings: () => Promise<AppSettings>
   updateAppSettings: (data: Partial<Omit<AppSettings, 'id' | 'updatedAt'>>) => Promise<AppSettings>
@@ -284,20 +311,46 @@ export interface ElectronApi {
     purchasesByDay: Record<number, number>
     discountsByDay: Record<number, number>
   }>
+  getGlobalStats: () => Promise<GlobalStats>
   // Canal+
   getCanalPlusCells: (warehouseId: string, month: string) => Promise<CanalPlusCell[]>
   saveCanalPlusCells: (warehouseId: string, month: string, cells: { day: number; col: string; value: number }[]) => Promise<void>
+  createCanalPlusSale: (data: {
+    warehouseId: string
+    clientName: string
+    subscriptionNumber: string
+    phone: string
+    formule: string
+    amount: number
+  }) => Promise<CanalPlusSale & { invoicePath: string }>
+  getCanalPlusSales: (warehouseId: string, search?: string) => Promise<CanalPlusSaleWithWarehouse[]>
+  getCanalPlusBalance: (warehouseId: string) => Promise<number>
   // Exports Excel stylisés
   exportRapportExcel: (params: ExportRapportParams) => Promise<string>
   exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
   exportCanalPlusExcel: (params: ExportCanalPlusParams) => Promise<string>
   exportTablePdf: (html: string, filename: string) => Promise<string>
+  openFile: (filePath: string) => Promise<void>
   // Updates
   checkForUpdates: () => void
   installUpdate: () => void
   onUpdateAvailable: (callback: () => void) => void
   onUpdateDownloaded: (callback: () => void) => void
   onUpdateError: (callback: (error: any) => void) => void
+}
+
+export interface Discount {
+  id: string
+  saleId: string
+  warehouseId: string
+  amount: number
+  reason: string | null
+  createdAt: string
+}
+
+export interface DiscountWithSale extends Discount {
+  sale: SaleWithClient
+  warehouse: Warehouse
 }
 
 export interface AppSettings {
@@ -377,6 +430,22 @@ export interface ExportMobileMoneyParams {
   }[]
 }
 
+export interface CanalPlusSale {
+  id: string
+  warehouseId: string
+  clientName: string
+  subscriptionNumber: string
+  phone: string
+  formule: string
+  amount: number
+  invoicePath: string | null
+  createdAt: string
+}
+
+export interface CanalPlusSaleWithWarehouse extends CanalPlusSale {
+  warehouse: Warehouse
+}
+
 export interface ExportCanalPlusParams {
   month: string
   monthName: string
@@ -393,5 +462,28 @@ export interface ExportCanalPlusParams {
     achatDecoder: number
     installationDepannage: number
     commission: number
+  }[]
+}
+
+export interface GlobalStats {
+  warehouses: number
+  products: number
+  sales: number
+  stockAlerts: number
+  topWarehouse: {
+    id: string
+    name: string
+    sales: number
+    products: number
+    totalItems: number
+    alerts: number
+  } | null
+  warehouseStats: {
+    id: string
+    name: string
+    sales: number
+    products: number
+    totalItems: number
+    alerts: number
   }[]
 }

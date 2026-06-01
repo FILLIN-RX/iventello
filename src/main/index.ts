@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } from 'electron'
 import { join, extname } from 'node:path'
 import { copyFileSync, mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -15,13 +15,17 @@ import { createExpenseService } from './services/expenseService'
 import { createCashRegisterService } from './services/cashRegisterService'
 import { createMobileMoneyService } from './services/mobileMoneyService'
 import { createCanalPlusService } from './services/canalPlusService'
+import { createCanalPlusSaleService } from './services/canalPlusSaleService'
 import { createAppSettingsService } from './services/appSettingsService'
+import { createDiscountService } from './services/discountService'
 import { createMonthlyReportService } from './services/monthlyReportService'
 import { exportRapportExcel, exportMobileMoneyExcel, exportCanalPlusExcel } from './services/excelExportService'
 import { initAutoUpdater } from './services/autoUpdaterService'
+import { createGlobalStatsService } from './services/globalStatsService'
 
 let prisma: PrismaClient | null = null
 let mainWindow: BrowserWindow | null = null
+let splashWindow: BrowserWindow | null = null
 
 async function initDatabase(): Promise<void> {
   const userDataPath = app.getPath('userData')
@@ -144,6 +148,7 @@ async function initDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS "CashTransaction" (
       "id" TEXT PRIMARY KEY, "type" TEXT NOT NULL, "totalAmount" REAL NOT NULL,
       "paymentMethod" TEXT NOT NULL DEFAULT 'ESPECES', "description" TEXT,
+      "category" TEXT NOT NULL DEFAULT 'GENERAL',
       "warehouseId" TEXT NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
@@ -170,6 +175,25 @@ async function initDatabase(): Promise<void> {
       UNIQUE ("warehouseId", "month", "day", "col")
     )`)
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Discount" (
+      "id" TEXT PRIMARY KEY, "saleId" TEXT NOT NULL, "warehouseId" TEXT NOT NULL,
+      "amount" REAL NOT NULL, "reason" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("saleId") REFERENCES "Sale"("id"),
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
+    )`)
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CanalPlusSale" (
+      "id" TEXT PRIMARY KEY, "warehouseId" TEXT NOT NULL,
+      "clientName" TEXT NOT NULL, "subscriptionNumber" TEXT NOT NULL,
+      "phone" TEXT NOT NULL, "formule" TEXT NOT NULL,
+      "amount" REAL NOT NULL, "invoicePath" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
+    )`)
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AppSettings" (
       "id" TEXT PRIMARY KEY, "companyName" TEXT NOT NULL DEFAULT 'Mon Entreprise',
       "companyNui" TEXT, "companyBp" TEXT, "companyAddress" TEXT,
@@ -186,6 +210,41 @@ async function initDatabase(): Promise<void> {
     }
     if (!whCols.some((c: any) => c.name === 'mobileMoneyEnabled')) {
       await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "mobileMoneyEnabled" INTEGER NOT NULL DEFAULT 0`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyName')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyName" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyNui')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyNui" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyBp')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyBp" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyAddress')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyAddress" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyPhones')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyPhones" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyEmail')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyEmail" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyLogo')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyLogo" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceCompanyDescription')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceCompanyDescription" TEXT`)
+    }
+    if (!whCols.some((c: any) => c.name === 'invoiceFooter')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Warehouse" ADD COLUMN "invoiceFooter" TEXT`)
+    }
+  } catch { /* ignorer */ }
+
+  // Migration : CashTransaction — ajout colonne category
+  try {
+    const ctCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("CashTransaction")`)
+    if (!ctCols.some((c: any) => c.name === 'category')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "CashTransaction" ADD COLUMN "category" TEXT NOT NULL DEFAULT 'GENERAL'`)
     }
   } catch { /* ignorer */ }
 
@@ -222,9 +281,14 @@ function registerIpcHandlers(): void {
   const expenseService = createExpenseService(prisma)
   const cashRegisterService = createCashRegisterService(prisma)
   const appSettingsService = createAppSettingsService(prisma)
+  const discountService = createDiscountService(prisma)
   const monthlyReportService = createMonthlyReportService(prisma)
   const mobileMoneyService = createMobileMoneyService(prisma)
   const canalPlusService = createCanalPlusService(prisma)
+  const canalPlusSaleService = createCanalPlusSaleService(prisma)
+  const globalStatsService = createGlobalStatsService(prisma)
+
+  ipcMain.handle('db:get-global-stats', () => globalStatsService.getStats())
 
   ipcMain.handle('db:get-products', () => productService.getAll())
   ipcMain.handle('db:get-product-by-barcode', (_e, b: string) => productService.getByBarcode(b))
@@ -260,6 +324,25 @@ function registerIpcHandlers(): void {
       )
     })
     ;(sale as any).cashTransactionId = transaction.id
+
+    // Si une remise a été appliquée, l'enregistrer et créer une sortie dans le cahier de caisse
+    if (saleData.discount > 0) {
+      await discountService.create({
+        saleId: sale.id,
+        warehouseId: saleData.warehouseId,
+        amount: saleData.discount,
+        reason: null
+      })
+      await cashRegisterService.create({
+        type: 'SORTIE',
+        warehouseId: saleData.warehouseId,
+        totalAmount: saleData.discount,
+        paymentMethod: saleData.paymentMethod || 'ESPECES',
+        description: `Remise sur vente — N° ${sale.id.slice(0, 8).toUpperCase()}`,
+        lines: []
+      })
+    }
+
     return sale
   })
 
@@ -286,6 +369,15 @@ function registerIpcHandlers(): void {
     if (!existsSync(logosDir)) mkdirSync(logosDir, { recursive: true })
     const ext = extname(sourcePath)
     const dest = join(logosDir, `${warehouseId}${ext}`)
+    copyFileSync(sourcePath, dest)
+    return dest
+  })
+
+  ipcMain.handle('file:save-invoice-logo', async (_e, sourcePath: string, warehouseId: string) => {
+    const logosDir = join(app.getPath('userData'), 'logos')
+    if (!existsSync(logosDir)) mkdirSync(logosDir, { recursive: true })
+    const ext = extname(sourcePath)
+    const dest = join(logosDir, `invoice_${warehouseId}${ext}`)
     copyFileSync(sourcePath, dest)
     return dest
   })
@@ -422,6 +514,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:delete-cash-transaction', (_e, id: string) => cashRegisterService.delete(id))
   ipcMain.handle('print:export-cash-report', (_e, data) => reportService.exportCashReport(data))
 
+  // Remises
+  ipcMain.handle('db:get-discounts', (_e, warehouseId?: string) => discountService.getAll(warehouseId))
+
   // AppSettings
   ipcMain.handle('db:get-app-settings', () => appSettingsService.get())
   ipcMain.handle('db:update-app-settings', (_e, d) => appSettingsService.update(d))
@@ -438,6 +533,40 @@ function registerIpcHandlers(): void {
   // Canal+
   ipcMain.handle('db:get-canal-plus-cells', (_e, wid: string, month: string) => canalPlusService.getCells(wid, month))
   ipcMain.handle('db:save-canal-plus-cells', (_e, wid: string, month: string, cells) => canalPlusService.saveCells(wid, month, cells))
+
+  ipcMain.handle('db:create-canal-plus-sale', async (_e, data) => {
+    const sale = await canalPlusSaleService.create(data)
+
+    // Créer l'entrée dans le cahier de caisse (catégorie CANAL_PLUS)
+    await cashRegisterService.create({
+      type: 'ENTREE',
+      warehouseId: data.warehouseId,
+      totalAmount: data.amount,
+      paymentMethod: 'ESPECES',
+      description: `Canal+ — ${data.clientName} (${data.formule})`,
+      category: 'CANAL_PLUS',
+      lines: []
+    })
+
+    // Mettre à jour la cellule du jour dans le tableau Canal+
+    const today = new Date()
+    const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    const day = today.getDate()
+    const existing = await prisma.canalPlusCell.findUnique({
+      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col: 'abonnement' } }
+    })
+    const newValue = (existing?.value ?? 0) + data.amount
+    await prisma.canalPlusCell.upsert({
+      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col: 'abonnement' } },
+      create: { warehouseId: data.warehouseId, month, day, col: 'abonnement', value: newValue },
+      update: { value: newValue }
+    })
+
+    return sale
+  })
+
+  ipcMain.handle('db:get-canal-plus-sales', (_e, wid: string, search?: string) => canalPlusSaleService.getAll(wid, search))
+  ipcMain.handle('db:get-canal-plus-balance', (_e, wid: string) => cashRegisterService.getCanalPlusBalance(wid))
 
   // Export Excel stylisé (via exceljs)
   ipcMain.handle('export:rapport-excel', async (_e, params) => exportRapportExcel(params))
@@ -456,16 +585,70 @@ function registerIpcHandlers(): void {
     writeFileSync(path, pdfBuf)
     return path
   })
+
+  // Ouvrir un fichier dans le navigateur par défaut
+  ipcMain.handle('shell:open-file', async (_e, filePath: string) => {
+    await shell.openPath(filePath)
+  })
+}
+
+function createSplashWindow(): void {
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 400,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    center: true,
+    show: true,
+    webPreferences: {
+      sandbox: false
+    }
+  })
+
+  const splashHtml = `
+    <html>
+      <body style="margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: transparent; font-family: sans-serif;">
+        <div style="text-align: center; background: white; padding: 40px; border-radius: 24px; shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center;">
+          <img src="local-file://${join(app.getAppPath(), 'out/renderer/iventello.png')}" style="width: 120px; height: 120px; margin-bottom: 20px;" />
+          <div style="font-weight: bold; color: #333; font-size: 20px; margin-bottom: 10px;">iventello</div>
+          <div style="color: #666; font-size: 14px;">Initialisation de votre gestionnaire...</div>
+          <div style="margin-top: 20px; width: 200px; height: 4px; background: #eee; border-radius: 2px; overflow: hidden;">
+            <div style="width: 40%; height: 100%; background: #3b82f6; border-radius: 2px; animation: loading 2s infinite ease-in-out;"></div>
+          </div>
+        </div>
+        <style>
+          @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+        </style>
+      </body>
+    </html>
+  `
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml)}`)
 }
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280, height: 800,
+    show: false,
+    backgroundColor: '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, nodeIntegration: false, sandbox: false
     }
   })
+
+  mainWindow.once('ready-to-show', () => {
+    if (splashWindow) {
+      splashWindow.close()
+      splashWindow = null
+    }
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
+
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
@@ -479,11 +662,23 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'local-file', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
+// Désactiver IBUS pour éviter les warnings et la perte de saisie
+app.commandLine.appendSwitch('disable-features', 'UseOzonePlatform')
+app.commandLine.appendSwitch('disable-features', 'ImeService')
+
+// Éviter les logs IBUS dans la console
+const env = process.env as Record<string, string | undefined>
+env.GTK_IM_MODULE = env.GTK_IM_MODULE || 'xim'
+env.GTK_MODULES = ''
+
 app.whenReady().then(async () => {
   protocol.handle('local-file', (request) => {
     const filePath = decodeURIComponent(request.url.slice('local-file://'.length))
     return net.fetch('file://' + filePath)
   })
+
+  createSplashWindow()
+
   await initDatabase()
   registerIpcHandlers()
   createWindow()
