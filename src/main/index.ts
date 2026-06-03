@@ -116,14 +116,23 @@ async function initDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Stock" (
       "id" TEXT PRIMARY KEY, "productId" TEXT NOT NULL, "warehouseId" TEXT NOT NULL,
-      "quantity" INTEGER NOT NULL DEFAULT 0, "alertLimit" INTEGER NOT NULL DEFAULT 5, "shelfLocation" TEXT,
+      "quantity" INTEGER NOT NULL DEFAULT 0, "quantityMagasin" INTEGER NOT NULL DEFAULT 0,
+      "alertLimit" INTEGER NOT NULL DEFAULT 5, "shelfLocation" TEXT,
       FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE,
       FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id") ON DELETE CASCADE,
       UNIQUE ("productId", "warehouseId")
     )`)
+  // Migration : ajouter quantityMagasin si colonne manquante
+  try {
+    const stockCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Stock")`)
+    if (!stockCols.some((c: any) => c.name === 'quantityMagasin')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Stock" ADD COLUMN "quantityMagasin" INTEGER NOT NULL DEFAULT 0`)
+    }
+  } catch { /* ignorer */ }
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Sale" (
       "id" TEXT PRIMARY KEY, "warehouseId" TEXT NOT NULL, "clientId" TEXT,
+      "invoiceNumber" TEXT NOT NULL DEFAULT '',
       "subTotal" REAL NOT NULL, "vatTotal" REAL NOT NULL DEFAULT 0, "discount" REAL NOT NULL DEFAULT 0,
       "finalTotal" REAL NOT NULL, "paymentMethod" TEXT NOT NULL DEFAULT 'Cash',
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -184,13 +193,35 @@ async function initDatabase(): Promise<void> {
     )`)
 
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ServiceSale" (
+      "id" TEXT PRIMARY KEY, "warehouseId" TEXT NOT NULL,
+      "serviceType" TEXT NOT NULL, "description" TEXT,
+      "quantity" INTEGER NOT NULL DEFAULT 1, "unitPrice" REAL NOT NULL,
+      "totalAmount" REAL NOT NULL, "clientName" TEXT,
+      "invoiceNumber" TEXT NOT NULL DEFAULT '',
+      "invoicePath" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
+    )`)
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "CanalPlusSale" (
       "id" TEXT PRIMARY KEY, "warehouseId" TEXT NOT NULL,
       "clientName" TEXT NOT NULL, "subscriptionNumber" TEXT NOT NULL,
       "phone" TEXT NOT NULL, "formule" TEXT NOT NULL,
-      "amount" REAL NOT NULL, "invoicePath" TEXT,
+      "amount" REAL NOT NULL, "invoiceNumber" TEXT NOT NULL DEFAULT '',
+      "invoicePath" TEXT,
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
+    )`)
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "MagasinTransaction" (
+      "id" TEXT PRIMARY KEY, "productId" TEXT NOT NULL, "warehouseId" TEXT NOT NULL,
+      "type" TEXT NOT NULL, "quantity" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE,
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id") ON DELETE CASCADE
     )`)
 
   await prisma.$executeRawUnsafe(`
@@ -301,10 +332,24 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:update-product', (_e, id: string, d) => productService.update(id, d))
   ipcMain.handle('db:delete-product', (_e, id: string) => productService.delete(id))
 
+  async function nextInvoiceNumber(prefix: string): Promise<string> {
+    const now = new Date()
+    const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const pattern = `${prefix}-${yymm}-`
+    const last = await prisma!.sale.findFirst({
+      where: { invoiceNumber: { startsWith: pattern } },
+      orderBy: { invoiceNumber: 'desc' },
+      select: { invoiceNumber: true }
+    })
+    const lastNum = last ? parseInt(last.invoiceNumber.split('-').pop() ?? '0', 10) : 0
+    return `${pattern}${String(lastNum + 1).padStart(4, '0')}`
+  }
+
   ipcMain.handle('db:create-sale', async (_e, data) => {
     const { items, ...saleData } = data
+    const invoiceNumber = await nextInvoiceNumber('FACT')
     const sale = await prisma!.sale.create({
-      data: { ...saleData, items: { create: items } },
+      data: { ...saleData, invoiceNumber, items: { create: items } },
       include: { items: true, client: true, warehouse: true }
     })
     // Créer automatiquement l'entrée dans le cahier de caisse
@@ -338,7 +383,7 @@ function registerIpcHandlers(): void {
         warehouseId: saleData.warehouseId,
         totalAmount: saleData.discount,
         paymentMethod: saleData.paymentMethod || 'ESPECES',
-        description: `Remise sur vente — N° ${sale.id.slice(0, 8).toUpperCase()}`,
+        description: `Remise sur vente — N° ${invoiceNumber}`,
         lines: []
       })
     }
@@ -458,10 +503,10 @@ function registerIpcHandlers(): void {
     const { warehouseId, supplierName, items } = data as {
       warehouseId: string
       supplierName: string
-      items: { productId: string; quantity: number; unitPrice: number; productName: string }[]
+      items: { productId: string; quantity: number; unitPrice: number; productName: string; sendToMagasin?: boolean }[]
     }
     const totalAmount = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
-    return cashRegisterService.create({
+    const transaction = await cashRegisterService.create({
       type: 'SORTIE',
       warehouseId,
       totalAmount,
@@ -474,6 +519,158 @@ function registerIpcHandlers(): void {
         subTotal: i.quantity * i.unitPrice
       }))
     })
+    // Pour les articles envoyés au magasin : corriger le stock boutique → magasin
+    for (const item of items) {
+      if (item.sendToMagasin) {
+        const stock = await prisma.stock.findFirst({
+          where: { productId: item.productId, warehouseId }
+        })
+        if (stock) {
+          await prisma.stock.update({
+            where: { id: stock.id },
+            data: {
+              quantity: { decrement: item.quantity },
+              quantityMagasin: { increment: item.quantity }
+            }
+          })
+          await prisma.magasinTransaction.create({
+            data: {
+              productId: item.productId, warehouseId,
+              type: 'ENTREE', quantity: item.quantity
+            }
+          })
+        }
+      }
+    }
+    return transaction
+  })
+
+  // Magasin (stock arrière)
+  ipcMain.handle('magasin:get-stock', async (_e, warehouseId: string) => {
+    const stocks = await prisma.stock.findMany({
+      where: { warehouseId, quantityMagasin: { gt: 0 } },
+      include: { product: { include: { supplier: true, category: true } }, warehouse: true },
+      orderBy: { product: { name: 'asc' } }
+    })
+    return stocks
+  })
+
+  ipcMain.handle('magasin:transfer-to-boutique', async (_e, data: {
+    productId: string; warehouseId: string; quantity: number
+  }) => {
+    const stock = await prisma.stock.findFirst({
+      where: { productId: data.productId, warehouseId: data.warehouseId }
+    })
+    if (!stock || stock.quantityMagasin < data.quantity) throw new Error('Stock magasin insuffisant')
+    const [updated] = await prisma.$transaction([
+      prisma.stock.update({
+        where: { id: stock.id },
+        data: {
+          quantityMagasin: { decrement: data.quantity },
+          quantity: { increment: data.quantity }
+        }
+      }),
+      prisma.magasinTransaction.create({
+        data: {
+          productId: data.productId,
+          warehouseId: data.warehouseId,
+          type: 'SORTIE',
+          quantity: data.quantity
+        }
+      })
+    ])
+    return productService.getById(data.productId)
+  })
+
+  ipcMain.handle('magasin:send-to-magasin', async (_e, data: {
+    productId: string; warehouseId: string; quantity: number
+  }) => {
+    const stock = await prisma.stock.findFirst({
+      where: { productId: data.productId, warehouseId: data.warehouseId }
+    })
+    if (!stock) {
+      await prisma.stock.create({
+        data: {
+          productId: data.productId,
+          warehouseId: data.warehouseId,
+          quantity: 0,
+          quantityMagasin: data.quantity,
+          alertLimit: 5
+        }
+      })
+    } else {
+      if (stock.quantity < data.quantity) throw new Error('Stock boutique insuffisant')
+      await prisma.stock.update({
+        where: { id: stock.id },
+        data: {
+          quantity: { decrement: data.quantity },
+          quantityMagasin: { increment: data.quantity }
+        }
+      })
+    }
+    await prisma.magasinTransaction.create({
+      data: {
+        productId: data.productId,
+        warehouseId: data.warehouseId,
+        type: 'ENTREE',
+        quantity: data.quantity
+      }
+    })
+    return productService.getById(data.productId)
+  })
+
+  ipcMain.handle('magasin:receive-purchase', async (_e, data: {
+    productId: string; warehouseId: string; quantity: number; unitPrice: number; paymentMethod?: string
+  }) => {
+    // Comptabilité : enregistre la sortie de caisse pour l'achat
+    await cashRegisterService.create({
+      type: 'SORTIE',
+      warehouseId: data.warehouseId,
+      totalAmount: data.unitPrice * data.quantity,
+      paymentMethod: data.paymentMethod || 'ESPECES',
+      description: `Achat → Magasin (${data.quantity} unité${data.quantity > 1 ? 's' : ''})`,
+      lines: [{
+        productId: data.productId,
+        quantity: data.quantity,
+        unitPrice: data.unitPrice,
+        subTotal: data.unitPrice * data.quantity
+      }]
+    })
+    // Le stock boutique n'est pas impacté (cashRegisterService incremente quantity, on corrige)
+    const stock = await prisma.stock.findFirst({
+      where: { productId: data.productId, warehouseId: data.warehouseId }
+    })
+    if (stock) {
+      // Annuler l'incrément sur quantity fait par cashRegisterService,
+      // et ajouter à quantityMagasin à la place
+      await prisma.stock.update({
+        where: { id: stock.id },
+        data: {
+          quantity: { decrement: data.quantity },
+          quantityMagasin: { increment: data.quantity }
+        }
+      })
+    } else {
+      // cashRegisterService a déjà créé un stock avec quantity, on le convertit
+      const newStock = await prisma.stock.findFirst({
+        where: { productId: data.productId, warehouseId: data.warehouseId }
+      })
+      if (newStock) {
+        await prisma.stock.update({
+          where: { id: newStock.id },
+          data: { quantity: 0, quantityMagasin: data.quantity }
+        })
+      }
+    }
+    await prisma.magasinTransaction.create({
+      data: {
+        productId: data.productId,
+        warehouseId: data.warehouseId,
+        type: 'ENTREE',
+        quantity: data.quantity
+      }
+    })
+    return productService.getById(data.productId)
   })
 
   // Catégories
@@ -534,6 +731,14 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:get-canal-plus-cells', (_e, wid: string, month: string) => canalPlusService.getCells(wid, month))
   ipcMain.handle('db:save-canal-plus-cells', (_e, wid: string, month: string, cells) => canalPlusService.saveCells(wid, month, cells))
 
+  const FORMULE_TO_COL: Record<string, string> = {
+    'Access': 'reabonnementAccess',
+    'Évasion': 'reabonnementEvasion',
+    'Access+': 'reabonnementAccessPlus',
+    'Tout Canal': 'reabonnementToutCanal',
+    'Autres': 'reabonnementOthers',
+  }
+
   ipcMain.handle('db:create-canal-plus-sale', async (_e, data) => {
     const sale = await canalPlusSaleService.create(data)
 
@@ -548,17 +753,18 @@ function registerIpcHandlers(): void {
       lines: []
     })
 
-    // Mettre à jour la cellule du jour dans le tableau Canal+
+    // Mapper le type et la formule vers la colonne correspondante du tableau
     const today = new Date()
     const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
     const day = today.getDate()
+    const col = data.saleType === 'abonnement' ? 'abonnement' : (FORMULE_TO_COL[data.formule] ?? 'abonnement')
     const existing = await prisma.canalPlusCell.findUnique({
-      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col: 'abonnement' } }
+      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col } }
     })
     const newValue = (existing?.value ?? 0) + data.amount
     await prisma.canalPlusCell.upsert({
-      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col: 'abonnement' } },
-      create: { warehouseId: data.warehouseId, month, day, col: 'abonnement', value: newValue },
+      where: { warehouseId_month_day_col: { warehouseId: data.warehouseId, month, day, col } },
+      create: { warehouseId: data.warehouseId, month, day, col, value: newValue },
       update: { value: newValue }
     })
 
@@ -567,6 +773,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('db:get-canal-plus-sales', (_e, wid: string, search?: string) => canalPlusSaleService.getAll(wid, search))
   ipcMain.handle('db:get-canal-plus-balance', (_e, wid: string) => cashRegisterService.getCanalPlusBalance(wid))
+  ipcMain.handle('db:get-canal-plus-daily-balance', (_e, wid: string) => cashRegisterService.getCanalPlusDailyBalance(wid))
 
   // Export Excel stylisé (via exceljs)
   ipcMain.handle('export:rapport-excel', async (_e, params) => exportRapportExcel(params))

@@ -32,6 +32,7 @@ model Warehouse {
   canalPlusCells     CanalPlusCell[]
   canalPlusSales     CanalPlusSale[]
   discounts          Discount[]
+  magasinTransactions MagasinTransaction[]
 }
 
 model Supplier {
@@ -95,6 +96,7 @@ model Product {
   stocks            Stock[]
   saleItems         SaleItem[]
   cashTransactionLines CashTransactionLine[]
+  magasinTransactions MagasinTransaction[]
 }
 
 model Category {
@@ -116,23 +118,37 @@ model Expense {
 }
 
 model Stock {
-  id             String   @id @default(uuid())
-  productId      String
-  warehouseId    String
-  quantity       Int      @default(0)
-  alertLimit     Int      @default(5)
-  shelfLocation  String?
+  id               String   @id @default(uuid())
+  productId        String
+  warehouseId      String
+  quantity         Int      @default(0)
+  quantityMagasin  Int      @default(0)
+  alertLimit       Int      @default(5)
+  shelfLocation    String?
 
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouse      Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([productId, warehouseId])
+}
+
+model MagasinTransaction {
+  id          String   @id @default(uuid())
+  productId   String
+  warehouseId String
+  type        String   // 'ENTREE' (achat → magasin) | 'SORTIE' (magasin → boutique) | 'RETOUR' (boutique → magasin)
+  quantity    Int
+  createdAt   DateTime @default(now())
+
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 }
 
 model Sale {
   id            String     @id @default(uuid())
   warehouseId   String
   clientId      String?
+  invoiceNumber String
   subTotal      Float
   vatTotal      Float
   discount      Float      @default(0)
@@ -236,6 +252,22 @@ model CanalPlusCell {
   @@unique([warehouseId, month, day, col])
 }
 
+model ServiceSale {
+  id            String   @id @default(uuid())
+  warehouseId   String
+  serviceType   String   // 'photocopie' | 'impression' | 'scan'
+  description   String?
+  quantity      Int      @default(1)
+  unitPrice     Float
+  totalAmount   Float
+  clientName    String?
+  invoiceNumber String
+  invoicePath   String?
+  createdAt     DateTime @default(now())
+
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+}
+
 model CanalPlusSale {
   id                 String   @id @default(uuid())
   warehouseId        String
@@ -244,9 +276,9 @@ model CanalPlusSale {
   phone              String
   formule            String
   amount             Float
+  invoiceNumber      String
   invoicePath        String?
   createdAt          DateTime @default(now())
-
   warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
 }
 

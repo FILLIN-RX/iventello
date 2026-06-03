@@ -5,6 +5,7 @@ interface ReceiptData {
   items: { product: { name: string; price: number }; quantity: number }[]
   totalAmount: number
   saleId: string
+  invoiceNumber: string
   date: string
 }
 
@@ -16,7 +17,7 @@ function buildReceiptLines(data: ReceiptData) {
   lines.push({ type: 'text', value: '', style: { fontSize: '8px' } })
   lines.push({ type: 'text', value: '─'.repeat(32), style: { textAlign: 'center' } })
   lines.push({ type: 'text', value: '', style: { fontSize: '8px' } })
-  lines.push({ type: 'text', value: `N° ${data.saleId.slice(0, 8)}  |  ${data.date}`, style: { textAlign: 'center', fontSize: '11px' } })
+  lines.push({ type: 'text', value: `N° ${data.invoiceNumber}  |  ${data.date}`, style: { textAlign: 'center', fontSize: '11px' } })
   lines.push({ type: 'text', value: '', style: { fontSize: '8px' } })
   lines.push({ type: 'text', value: '─'.repeat(32), style: { textAlign: 'center' } })
   lines.push({ type: 'text', value: 'Qté  Prix    Total', style: { fontWeight: '700', fontSize: '11px' } })

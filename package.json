@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Application de gestion de stock et de caisse (Offline Desktop)",
   "main": "./out/main/index.js",
+  "author": "RUXEL DJEUTCHOU <djeutchouruxel@exemple.com>",
   "scripts": {
     "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",

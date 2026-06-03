@@ -314,7 +314,7 @@ export default function SettingsView() {
                   {/* Corps facture */}
                   <div className="mt-4 border-t pt-3 text-right">
                     <h3 className="text-xl font-bold">FACTURE</h3>
-                    <p className="text-sm text-gray-500">N° FACT-2026-0001</p>
+                    <p className="text-sm text-gray-500">N° FACT-{new Date().getFullYear()}-{(new Date().getMonth()+1).toString().padStart(2,'0')}-0001</p>
                     <p className="text-sm text-gray-500">Date: 01/06/2026</p>
                   </div>
 

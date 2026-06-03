@@ -44,6 +44,7 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
         })),
         totalAmount: sale.finalTotal,
         saleId: sale.id,
+        invoiceNumber: sale.invoiceNumber,
         date: new Date(sale.createdAt).toLocaleDateString('fr-FR')
       })
     } catch (err) {
@@ -89,7 +90,7 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
         <div className="flex items-center justify-between text-sm">
           <div>
             <p className="font-bold text-lg">FACTURE</p>
-            <p className="text-xs text-muted-foreground font-mono">N° {sale.id.slice(0, 8).toUpperCase()}</p>
+            <p className="text-xs text-muted-foreground font-mono">N° {sale.invoiceNumber}</p>
           </div>
           <p className="text-xs text-muted-foreground">
             {new Date(sale.createdAt).toLocaleDateString('fr-FR', {

@@ -22,6 +22,7 @@ import Caisse from './views/Caisse'
 import CahierCaisse from './views/CahierCaisse'
 import { MobileMoneySheet } from './views/MobileMoneySheet'
 import { CanalPlus } from './views/CanalPlus'
+import Magasin from './views/Magasin'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { FloatingActions } from './components/FloatingActions'
 import Factures from './views/Factures'
@@ -45,6 +46,8 @@ type WorkspaceView =
   | 'clients' | 'rapports' | 'journal'
   | 'fournisseurs'
   | 'canal-plus'
+  | 'mobile-money'
+  | 'magasin'
 
 interface NavItem {
   id: WorkspaceView
@@ -59,6 +62,7 @@ const workspaceNav: NavItem[] = [
   { id: 'categories', label: 'Catégories', icon: Tag, group: 'catalogue' },
   { id: 'stock-faible', label: 'Stock faible', icon: AlertTriangle, group: 'stock' },
   { id: 'rupture', label: 'Rupture', icon: XCircle, group: 'stock' },
+  { id: 'magasin', label: 'Magasin', icon: WarehouseIcon, group: 'stock' },
   { id: 'caisse', label: 'Ventes', icon: ShoppingCart, group: 'commercial' },
   { id: 'cahier-caisse', label: 'Cahier de caisse', icon: Receipt, group: 'commercial' },
   { id: 'factures', label: 'Factures', icon: FileText, group: 'commercial' },
@@ -86,6 +90,7 @@ const VIEW_TITLES: Record<string, string> = {
   clients: 'Clients', remises: 'Remises', rapports: 'Rapports', journal: "Journal d'activité",
   fournisseurs: 'Fournisseurs',
   'canal-plus': 'Canal+',
+  magasin: 'Magasin',
 }
 
 function getInitialTheme(): boolean {
@@ -102,9 +107,8 @@ const mainNav = [
 ]
 
 export default function App() {
-  const { selectedId, selectedName, clear } = useEntrepotStore()
+  const { selectedId, selectedName, clear, workspaceView, setWorkspaceView } = useEntrepotStore()
   const [mainView, setMainView] = useState<MainView>('accueil')
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('dashboard')
   const [dark, setDark] = useState(getInitialTheme)
   const isWorkspace = selectedId !== null
 
@@ -393,6 +397,7 @@ export default function App() {
               {workspaceView === 'journal' && <ActivityLog />}
               {workspaceView === 'mobile-money' && <MobileMoneySheet />}
               {workspaceView === 'canal-plus' && <CanalPlus />}
+              {workspaceView === 'magasin' && <Magasin />}
               {workspaceView === 'fournisseurs' && <Fournisseurs />}
             </>
           ) : (
@@ -403,7 +408,7 @@ export default function App() {
             </>
           )}
         </main>
-        <FloatingActions onNavigate={(v) => setWorkspaceView(v as WorkspaceView)} />
+        {isWorkspace && <FloatingActions onNavigate={(v) => setWorkspaceView(v as WorkspaceView)} />}
       </div>
     </div>
   )

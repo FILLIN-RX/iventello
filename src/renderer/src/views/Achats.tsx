@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { ShoppingBag, RefreshCw, FileDown, Package, Mail, Phone, Warehouse, CheckCircle2 } from 'lucide-react'
+import { ShoppingBag, RefreshCw, FileDown, Package, Mail, Phone, Warehouse, CheckCircle2, Store } from 'lucide-react'
 import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { cn } from '@/lib/utils'
 import { useEntrepotStore } from '../stores/entrepotStore'
 import type { PurchaseOrderItem } from '../../../shared/types'
 
@@ -12,6 +14,7 @@ export default function Achats() {
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  const [toMagasin, setToMagasin] = useState<Record<string, boolean>>({})
 
   async function handleAnalyze() {
     try {
@@ -27,6 +30,10 @@ export default function Achats() {
     } finally { setLoading(false) }
   }
 
+  function toggleMagasin(productId: string) {
+    setToMagasin(prev => ({ ...prev, [productId]: !prev[productId] }))
+  }
+
   async function handleConfirmPurchase(supplierName: string, items: PurchaseOrderItem[]) {
     if (!workspaceId || !supplierName || items.length === 0) return
     try {
@@ -38,7 +45,8 @@ export default function Achats() {
           productId: i.productId,
           productName: i.productName,
           quantity: i.suggestedQuantity,
-          unitPrice: 0 // prix d'achat à définir
+          unitPrice: 0, // prix d'achat à définir
+          sendToMagasin: !!toMagasin[i.productId]
         }))
       })
     } catch (err) {
@@ -110,16 +118,21 @@ export default function Achats() {
                   <p className="font-semibold flex items-center gap-2">
                     <Package className="h-4 w-4 text-primary" /> {supplier}
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
-                    onClick={() => handleConfirmPurchase(supplier, items)}
-                    disabled={confirming === supplier}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {confirming === supplier ? 'Confirmation...' : 'Confirmer la réception'}
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
+                      onClick={() => handleConfirmPurchase(supplier, items)}
+                      disabled={confirming === supplier}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {confirming === supplier ? 'Confirmation...' : 'Confirmer la réception'}
+                    </Button>
+                    {items.some(i => toMagasin[i.productId]) && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        {items.filter(i => toMagasin[i.productId]).length} au magasin
+                      </span>
+                    )}
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-4 text-xs text-muted-foreground">
                   {items[0].supplierEmail && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{items[0].supplierEmail}</span>}
@@ -127,24 +140,41 @@ export default function Achats() {
                 </div>
               </div>
               <div className="divide-y">
-                {items.map((o, i) => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{o.productName}</p>
-                      <p className="text-xs text-muted-foreground">Code : {o.productBarcode}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Warehouse className="h-3 w-3" /> {o.warehouseName}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-muted-foreground">Stock actuel / Seuil</p>
-                      <p className="font-semibold text-rose-600 text-sm">{o.currentStock} / {o.alertLimit}</p>
-                      <div className="mt-1 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground">
-                        Commander : {o.suggestedQuantity}
+                {items.map((o, i) => {
+                  const isMagasin = !!toMagasin[o.productId]
+                  return (
+                    <div key={i} className="flex items-center gap-4 px-5 py-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{o.productName}</p>
+                        <p className="text-xs text-muted-foreground">Code : {o.productBarcode}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Warehouse className="h-3 w-3" /> {o.warehouseName}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleMagasin(o.productId)}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          isMagasin
+                            ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                            : 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                        }`}
+                      >
+                        <Store className="h-3.5 w-3.5" />
+                        {isMagasin ? '→ Magasin' : 'Boutique'}
+                      </button>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs text-muted-foreground">Stock actuel / Seuil</p>
+                        <p className="font-semibold text-rose-600 text-sm">{o.currentStock} / {o.alertLimit}</p>
+                        <div className={cn(
+                          'mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold text-white',
+                          isMagasin ? 'bg-amber-600' : 'bg-primary'
+                        )}>
+                          {isMagasin ? '→ Magasin : ' : 'Commander : '}{o.suggestedQuantity}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}

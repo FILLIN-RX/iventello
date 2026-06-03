@@ -233,7 +233,7 @@ export function MobileMoneySheet() {
         <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Chargement...</div>
       ) : (
         <div className="overflow-auto rounded-xl border shadow-sm">
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full min-w-max text-xs border-collapse">
             <thead>
               <tr className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 sticky top-0 z-10">
                 <th className="w-20 px-2 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap border-b">Date</th>

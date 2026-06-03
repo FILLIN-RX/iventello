@@ -28,9 +28,22 @@ export function createCanalPlusSaleService(prisma: PrismaClient) {
       subscriptionNumber: string
       phone: string
       formule: string
+      saleType?: 'abonnement' | 'reabonnement'
       amount: number
     }) {
-      const sale = await prisma.canalPlusSale.create({ data })
+      const now = new Date()
+      const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const prefix = `CANAL-${yymm}-`
+      const last = await prisma.canalPlusSale.findFirst({
+        where: { invoiceNumber: { startsWith: prefix } },
+        orderBy: { invoiceNumber: 'desc' },
+        select: { invoiceNumber: true }
+      })
+      const lastNum = last ? parseInt(last.invoiceNumber.split('-').pop() ?? '0', 10) : 0
+      const invoiceNumber = `${prefix}${String(lastNum + 1).padStart(4, '0')}`
+
+      const { saleType: _, ...dbData } = data
+      const sale = await prisma.canalPlusSale.create({ data: { ...dbData, invoiceNumber } })
 
       const warehouse = await prisma.warehouse.findUnique({
         where: { id: data.warehouseId }
@@ -38,10 +51,10 @@ export function createCanalPlusSaleService(prisma: PrismaClient) {
 
       const invoiceDir = join(homedir(), 'Desktop', 'factures-canal-plus')
       if (!existsSync(invoiceDir)) mkdirSync(invoiceDir, { recursive: true })
-      const filename = `FACT-CANAL-${sale.id.slice(0, 8).toUpperCase()}.pdf`
+      const filename = `${invoiceNumber}.pdf`
       const invoicePath = join(invoiceDir, filename)
 
-      const html = generateInvoiceHtml(sale, warehouse)
+      const html = generateInvoiceHtml({ ...sale, invoiceNumber }, warehouse)
       const pdfWindow = new BrowserWindow({
         show: false,
         webPreferences: { sandbox: true }
@@ -68,6 +81,7 @@ function generateInvoiceHtml(sale: {
   phone: string
   formule: string
   amount: number
+  invoiceNumber: string
   createdAt: Date
 }, warehouse: {
   invoiceCompanyName: string | null
@@ -83,7 +97,7 @@ function generateInvoiceHtml(sale: {
 } | null) {
   const now = new Date(sale.createdAt)
   const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-  const num = sale.id.slice(0, 8).toUpperCase()
+  const num = sale.invoiceNumber
 
   const whName = warehouse?.invoiceCompanyName || warehouse?.name || ''
   const whDesc = warehouse?.invoiceCompanyDescription || ''
@@ -139,7 +153,7 @@ function generateInvoiceHtml(sale: {
 
   <div class="invoice-title-box">
     <h1>FACTURE CANAL+</h1>
-    <p>N° FACT-CANAL-${num} | ${dateStr}</p>
+    <p>N° ${num} | ${dateStr}</p>
   </div>
 
   <div class="info-grid">

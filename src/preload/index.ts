@@ -55,6 +55,12 @@ const api = {
   createCanalPlusSale: (data: unknown) => ipcRenderer.invoke('db:create-canal-plus-sale', data),
   getCanalPlusSales: (warehouseId: string, search?: string) => ipcRenderer.invoke('db:get-canal-plus-sales', warehouseId, search),
   getCanalPlusBalance: (warehouseId: string) => ipcRenderer.invoke('db:get-canal-plus-balance', warehouseId),
+  getCanalPlusDailyBalance: (warehouseId: string) => ipcRenderer.invoke('db:get-canal-plus-daily-balance', warehouseId),
+  // Magasin
+  getMagasinStock: (warehouseId: string) => ipcRenderer.invoke('magasin:get-stock', warehouseId),
+  transferMagasinToBoutique: (data: { productId: string; warehouseId: string; quantity: number }) => ipcRenderer.invoke('magasin:transfer-to-boutique', data),
+  sendToMagasin: (data: { productId: string; warehouseId: string; quantity: number }) => ipcRenderer.invoke('magasin:send-to-magasin', data),
+  receivePurchaseToMagasin: (data: { productId: string; warehouseId: string; quantity: number; unitPrice: number; paymentMethod?: string }) => ipcRenderer.invoke('magasin:receive-purchase', data),
   openFile: (filePath: string) => ipcRenderer.invoke('shell:open-file', filePath),
   exportRapportExcel: (params: unknown) => ipcRenderer.invoke('export:rapport-excel', params),
   exportMobileMoneyExcel: (params: unknown) => ipcRenderer.invoke('export:mobile-money-excel', params),

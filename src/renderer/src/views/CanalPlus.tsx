@@ -41,6 +41,21 @@ const FORMULES = [
 ]
 
 type TabId = 'vente' | 'historique' | 'tableau'
+type Period = 'month' | 'semester1' | 'semester2' | 'year'
+
+const PERIODS: { id: Period; label: string }[] = [
+  { id: 'month', label: 'Mois' },
+  { id: 'semester1', label: 'Semestre 1' },
+  { id: 'semester2', label: 'Semestre 2' },
+  { id: 'year', label: 'Année' },
+]
+
+function getPeriodMonths(period: Period): number[] {
+  if (period === 'month') return [new Date().getMonth() + 1]
+  if (period === 'semester1') return [1, 2, 3, 4, 5, 6]
+  if (period === 'semester2') return [7, 8, 9, 10, 11, 12]
+  return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+}
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate()
@@ -80,6 +95,7 @@ export function CanalPlus() {
   const [clientName, setClientName] = useState('')
   const [subscriptionNumber, setSubscriptionNumber] = useState('')
   const [phone, setPhone] = useState('')
+  const [saleType, setSaleType] = useState<'abonnement' | 'reabonnement'>('abonnement')
   const [formule, setFormule] = useState('Access')
   const [formuleAmount, setFormuleAmount] = useState(5000)
   const [extraOptions, setExtraOptions] = useState<{ name: string; price: number }[]>([])
@@ -87,7 +103,7 @@ export function CanalPlus() {
   const [optionPrice, setOptionPrice] = useState('')
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [lastSale, setLastSale] = useState<{ id: string; clientName: string; formule: string; amount: number; invoicePath: string } | null>(null)
+  const [lastSale, setLastSale] = useState<{ id: string; invoiceNumber: string; clientName: string; formule: string; amount: number; invoicePath: string } | null>(null)
   const [canalBalance, setCanalBalance] = useState(0)
 
   // États onglet Historique
@@ -101,13 +117,16 @@ export function CanalPlus() {
   const [dirty, setDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [gridRefreshKey, setGridRefreshKey] = useState(0)
+  const [period, setPeriod] = useState<Period>('month')
+  const [periodYear, setPeriodYear] = useState(new Date().getFullYear())
+  const [aggRows, setAggRows] = useState<Record<number, Record<string, number>>>({})
   const tabs = generateTabs()
   const currentTab = tabs[tabIndex]
 
-  // Charger balance Canal+
+  // Charger balance Canal+ du jour
   useEffect(() => {
     if (!selectedId) return
-    window.api.getCanalPlusBalance(selectedId).then(setCanalBalance).catch(() => {})
+    window.api.getCanalPlusDailyBalance(selectedId).then(setCanalBalance).catch(() => {})
   }, [selectedId, showSuccess])
 
   // Charger historique des ventes
@@ -160,6 +179,27 @@ export function CanalPlus() {
     }
     loadAll()
   }, [selectedId, gridRefreshKey])
+
+  // Charger données agrégées pour semestre/année
+  useEffect(() => {
+    if (!selectedId || period === 'month') return
+    const months = getPeriodMonths(period)
+    const loadAgg = async () => {
+      const result: Record<number, Record<string, number>> = {}
+      for (const m of months) {
+        const key = monthKey(periodYear, m)
+        const cells = await window.api.getCanalPlusCells(selectedId, key)
+        const monthTotals: Record<string, number> = {}
+        for (const col of INPUT_COLS) monthTotals[col] = 0
+        for (const c of cells) {
+          if (monthTotals[c.col] !== undefined) monthTotals[c.col] += c.value
+        }
+        result[m] = computeRow(monthTotals)
+      }
+      setAggRows(result)
+    }
+    loadAgg()
+  }, [selectedId, period, periodYear, gridRefreshKey])
 
   function setCell(day: number, col: string, value: number) {
     const key = monthKey(currentTab.year, currentTab.month)
@@ -255,10 +295,12 @@ export function CanalPlus() {
         subscriptionNumber: subscriptionNumber.trim(),
         phone: phone.trim(),
         formule: formule + descExtras,
+        saleType,
         amount: totalAmount,
       })
       setLastSale({
         id: sale.id,
+        invoiceNumber: sale.invoiceNumber,
         clientName: clientName.trim(),
         formule: formule,
         amount: totalAmount,
@@ -270,9 +312,10 @@ export function CanalPlus() {
       setPhone('')
       setFormule('Access')
       setFormuleAmount(5000)
+      setSaleType('abonnement')
       setExtraOptions([])
       setGridRefreshKey(k => k + 1)
-      const balance = await window.api.getCanalPlusBalance(selectedId)
+      const balance = await window.api.getCanalPlusDailyBalance(selectedId)
       setCanalBalance(balance)
     } catch (err) {
       console.error('Erreur création vente Canal+', err)
@@ -389,6 +432,31 @@ export function CanalPlus() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label>Type</Label>
+                  <div className="flex gap-1 rounded-lg bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSaleType('abonnement')}
+                      className={cn(
+                        'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                        saleType === 'abonnement' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      Abonnement
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSaleType('reabonnement')}
+                      className={cn(
+                        'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                        saleType === 'reabonnement' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      Réabonnement
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="formule">Formule</Label>
                   <Select value={formule} onValueChange={v => setFormule(v)}>
                     <SelectTrigger id="formule">
@@ -485,7 +553,7 @@ export function CanalPlus() {
               <p className="mt-2 text-3xl font-black tabular-nums">
                 {canalBalance.toLocaleString('fr-FR')} FCFA
               </p>
-              <p className="mt-1 text-xs text-blue-200">Total des encaissements Canal+</p>
+              <p className="mt-1 text-xs text-blue-200">Total des encaissements Canal+ du jour</p>
             </div>
               <div className="rounded-xl border bg-card p-4 shadow-sm">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Grille tarifaire</h4>
@@ -528,7 +596,7 @@ export function CanalPlus() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">N° Facture</span>
-                  <span className="font-medium">FACT-CANAL-{lastSale.id.slice(0, 8).toUpperCase()}</span>
+                  <span className="font-medium">{lastSale.invoiceNumber}</span>
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
@@ -616,38 +684,166 @@ export function CanalPlus() {
       {/* Onglet 3 : Tableau Excel */}
       {activeTab === 'tableau' && (
         <>
-          {/* Navigation mois */}
-          <div className="flex items-center justify-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => setTabIndex(Math.max(0, tabIndex - 1))} disabled={tabIndex === 0}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-semibold text-base min-w-[180px] text-center">
-              {MONTH_NAMES[currentTab.month - 1]} {currentTab.year}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setTabIndex(Math.min(tabs.length - 1, tabIndex + 1))} disabled={tabIndex === tabs.length - 1}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          {/* Sélecteur de période et navigation */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {PERIODS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setPeriod(p.id)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap',
+                    period === p.id ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              {period === 'month' ? (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setTabIndex(Math.max(0, tabIndex - 1))} disabled={tabIndex === 0}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-semibold text-base min-w-[180px] text-center">
+                    {MONTH_NAMES[currentTab.month - 1]} {currentTab.year}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setTabIndex(Math.min(tabs.length - 1, tabIndex + 1))} disabled={tabIndex === tabs.length - 1}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setPeriodYear(y => y - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-semibold text-base min-w-[180px] text-center">
+                    {period === 'semester1' ? 'Semestre 1' : period === 'semester2' ? 'Semestre 2' : 'Année'} {periodYear}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setPeriodYear(y => y + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Chargement...</div>
-          ) : (
+          ) : period !== 'month' ? (
+            /* Vue agrégée semestre/année */
             <div className="overflow-auto rounded-xl border shadow-sm">
-              <table className="w-full text-xs border-collapse">
+              <table className="w-full min-w-max text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 sticky top-0 z-10">
+                    <th className="w-20 px-2 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap border-b">Mois</th>
+                    {COLS.slice(1).map((col, ci) => {
+                      const colors = [
+                        'text-blue-700 dark:text-blue-300','text-sky-700 dark:text-sky-300','text-indigo-700 dark:text-indigo-300',
+                        'text-violet-700 dark:text-violet-300','text-purple-700 dark:text-purple-300','text-fuchsia-700 dark:text-fuchsia-300',
+                        'text-emerald-700 dark:text-emerald-300','text-orange-700 dark:text-orange-300','text-rose-700 dark:text-rose-300',
+                        'text-amber-700 dark:text-amber-300',
+                      ]
+                      return (
+                        <th key={col.key} className={`${col.width} px-2 py-3 text-right font-semibold whitespace-nowrap border-b ${colors[ci % colors.length]}`}>
+                          {col.label}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {getPeriodMonths(period).map((m) => {
+                    const row = aggRows[m] ?? {}
+                    return (
+                      <tr key={m} className={`hover:bg-muted/30 transition-colors border-b border-muted/20`}>
+                        <td className="px-2 py-2 text-muted-foreground font-medium whitespace-nowrap">{MONTH_NAMES[m - 1]}</td>
+                        {COLS.slice(1).map((col) => {
+                          const val = (row[col.key] as number) ?? 0
+                          return (
+                            <td key={col.key} className="px-2 py-2 text-right font-semibold tabular-nums">
+                              {val.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  {/* Lignes total pour vue agrégée */}
+                  {(() => {
+                    const aggTotal = (col: string) => getPeriodMonths(period).reduce((s, m) => s + ((aggRows[m]?.[col] as number) ?? 0), 0)
+                    const aggReab = aggTotal('totalReabonnement')
+                    const aggAbonn = aggTotal('abonnement')
+                    const aggReabPlus = aggReab + aggAbonn
+                    const aggGeneral = aggReab + aggAbonn + aggTotal('achatDecoder') + aggTotal('installationDepannage') + aggTotal('commission')
+                    return (
+                      <>
+                        <tr className="bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 font-semibold sticky bottom-0">
+                          <td className="px-2 py-3 text-muted-foreground whitespace-nowrap">TOTAL {period === 'year' ? 'ANNUEL' : 'SEMESTRIEL'}</td>
+                          {COLS.slice(1).map((col) => (
+                            <td key={col.key} className="px-2 py-3 text-right font-bold">
+                              {aggTotal(col.key).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr className="bg-blue-50 dark:bg-blue-950/20 font-semibold">
+                          <td className="px-2 py-2 text-blue-700 dark:text-blue-300 whitespace-nowrap">TOTAL RÉABONNEMENTS</td><td colSpan={5} />
+                          <td className="px-2 py-2 text-right text-blue-700 dark:text-blue-300 font-bold">{aggReab.toLocaleString('fr-FR')}</td><td colSpan={4} />
+                        </tr>
+                        <tr className="bg-emerald-50 dark:bg-emerald-950/20 font-semibold">
+                          <td className="px-2 py-2 text-emerald-700 dark:text-emerald-300 whitespace-nowrap">TOTAL RÉAB. + RECRUTEMENT</td><td colSpan={6} />
+                          <td className="px-2 py-2 text-right text-emerald-700 dark:text-emerald-300 font-bold">{aggReabPlus.toLocaleString('fr-FR')}</td><td colSpan={3} />
+                        </tr>
+                        <tr className="bg-amber-50 dark:bg-amber-950/20 font-bold text-sm">
+                          <td className="px-2 py-3 text-amber-800 dark:text-amber-300 whitespace-nowrap">TOTAL GÉNÉRAL</td><td colSpan={7} />
+                          <td className="px-2 py-3 text-right text-amber-800 dark:text-amber-300">{aggGeneral.toLocaleString('fr-FR')} FCFA</td><td colSpan={2} />
+                        </tr>
+                      </>
+                    )
+                  })()}
+                </tfoot>
+              </table>
+              <div className="grid grid-cols-3 gap-4 p-4 border-t bg-muted/20">
+                {(() => {
+                  const aggTotal = (col: string) => getPeriodMonths(period).reduce((s, m) => s + ((aggRows[m]?.[col] as number) ?? 0), 0)
+                  const aggReab = aggTotal('totalReabonnement')
+                  const aggAbonn = aggTotal('abonnement')
+                  const aggReabPlus = aggReab + aggAbonn
+                  const aggGeneral = aggReab + aggAbonn + aggTotal('achatDecoder') + aggTotal('installationDepannage') + aggTotal('commission')
+                  return (
+                    <>
+                      <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Réabonnements</p>
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{aggReab.toLocaleString('fr-FR')} FCFA</p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Réab. + Recrutement</p>
+                        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{aggReabPlus.toLocaleString('fr-FR')} FCFA</p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Général</p>
+                        <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{aggGeneral.toLocaleString('fr-FR')} FCFA</p>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            </div>
+          ) : (
+            /* Vue mensuelle éditable */
+            <div className="overflow-auto rounded-xl border shadow-sm">
+              <table className="w-full min-w-max text-xs border-collapse">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 sticky top-0 z-10">
                     <th className="w-20 px-2 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap border-b">Date</th>
                     {COLS.slice(1).map((col, ci) => {
                       const colors = [
-                        'text-blue-700 dark:text-blue-300',
-                        'text-sky-700 dark:text-sky-300',
-                        'text-indigo-700 dark:text-indigo-300',
-                        'text-violet-700 dark:text-violet-300',
-                        'text-purple-700 dark:text-purple-300',
-                        'text-fuchsia-700 dark:text-fuchsia-300',
-                        'text-emerald-700 dark:text-emerald-300',
-                        'text-orange-700 dark:text-orange-300',
-                        'text-rose-700 dark:text-rose-300',
+                        'text-blue-700 dark:text-blue-300','text-sky-700 dark:text-sky-300','text-indigo-700 dark:text-indigo-300',
+                        'text-violet-700 dark:text-violet-300','text-purple-700 dark:text-purple-300','text-fuchsia-700 dark:text-fuchsia-300',
+                        'text-emerald-700 dark:text-emerald-300','text-orange-700 dark:text-orange-300','text-rose-700 dark:text-rose-300',
                         'text-amber-700 dark:text-amber-300',
                       ]
                       return (

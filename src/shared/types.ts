@@ -40,6 +40,7 @@ export interface ProductWithRelations extends Product {
 export interface StockInfo {
   id: string
   quantity: number
+  quantityMagasin: number
   alertLimit: number
   shelfLocation: string | null
   warehouse: Warehouse
@@ -94,6 +95,7 @@ export interface Sale {
   id: string
   warehouseId: string
   clientId: string | null
+  invoiceNumber: string
   subTotal: number
   vatTotal: number
   discount: number
@@ -143,6 +145,7 @@ export interface ReceiptData {
   items: { product: { name: string; price: number }; quantity: number }[]
   totalAmount: number
   saleId: string
+  invoiceNumber: string
   date: string
 }
 
@@ -321,15 +324,22 @@ export interface ElectronApi {
     subscriptionNumber: string
     phone: string
     formule: string
+    saleType: 'abonnement' | 'reabonnement'
     amount: number
   }) => Promise<CanalPlusSale & { invoicePath: string }>
   getCanalPlusSales: (warehouseId: string, search?: string) => Promise<CanalPlusSaleWithWarehouse[]>
   getCanalPlusBalance: (warehouseId: string) => Promise<number>
+  getCanalPlusDailyBalance: (warehouseId: string) => Promise<number>
   // Exports Excel stylisés
   exportRapportExcel: (params: ExportRapportParams) => Promise<string>
   exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
   exportCanalPlusExcel: (params: ExportCanalPlusParams) => Promise<string>
   exportTablePdf: (html: string, filename: string) => Promise<string>
+  // Magasin
+  getMagasinStock: (warehouseId: string) => Promise<any[]>
+  transferMagasinToBoutique: (data: { productId: string; warehouseId: string; quantity: number }) => Promise<any>
+  sendToMagasin: (data: { productId: string; warehouseId: string; quantity: number }) => Promise<any>
+  receivePurchaseToMagasin: (data: { productId: string; warehouseId: string; quantity: number; unitPrice: number; paymentMethod?: string }) => Promise<any>
   openFile: (filePath: string) => Promise<void>
   // Updates
   checkForUpdates: () => void
@@ -438,6 +448,7 @@ export interface CanalPlusSale {
   phone: string
   formule: string
   amount: number
+  invoiceNumber: string
   invoicePath: string | null
   createdAt: string
 }

@@ -49,6 +49,16 @@ export function createCashRegisterService(prisma: PrismaClient) {
       return result._sum.totalAmount ?? 0
     },
 
+    async getCanalPlusDailyBalance(warehouseId: string) {
+      const startOfDay = new Date()
+      startOfDay.setHours(0, 0, 0, 0)
+      const result = await prisma.cashTransaction.aggregate({
+        where: { warehouseId, category: 'CANAL_PLUS', createdAt: { gte: startOfDay } },
+        _sum: { totalAmount: true }
+      })
+      return result._sum.totalAmount ?? 0
+    },
+
     async getTransactions(warehouseId: string) {
       return prisma.cashTransaction.findMany({
         where: { warehouseId },

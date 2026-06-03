@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Package, Truck, ArrowLeft, RotateCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, Truck, ArrowLeft, RotateCw, Store, Check, X } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
 import { useDeviceCheck } from '../hooks/useDeviceCheck'
@@ -50,6 +50,22 @@ function Produits() {
     if (!selectedId) { alert('Veuillez d\'abord sélectionner un entrepôt dans le tableau de bord.'); return }
     setRestockProduct(p)
     setShowRestockModal(true)
+  }
+
+  const [magasinQty, setMagasinQty] = useState<Record<string, number>>({})
+  const [sendingMagasin, setSendingMagasin] = useState<Record<string, boolean>>({})
+
+  async function handleSendToMagasin(p: ProductWithRelations) {
+    if (!selectedId) return
+    const qty = magasinQty[p.id] ?? 1
+    if (qty <= 0) return
+    setSendingMagasin(prev => ({ ...prev, [p.id]: true }))
+    try {
+      await window.api.sendToMagasin({ productId: p.id, warehouseId: selectedId, quantity: qty })
+      setMagasinQty(prev => ({ ...prev, [p.id]: 0 }))
+      refetch()
+    } catch (e) { console.error(e) }
+    finally { setSendingMagasin(prev => ({ ...prev, [p.id]: false })) }
   }
 
   function handleCreate() {
@@ -128,10 +144,15 @@ function Produits() {
                     </div>
                   )}
                   {/* Badge de stock flottant */}
-                  <div className="absolute bottom-2.5 left-2.5">
+                  <div className="absolute bottom-2.5 left-2.5 flex gap-1.5">
                     <Badge variant={p.stocks?.length ? (p.stocks[0].quantity <= p.stocks[0].alertLimit ? 'destructive' : 'default') : 'outline'} className="shadow-sm font-semibold">
                       Stock: {p.stocks?.[0]?.quantity ?? 0}
                     </Badge>
+                    {(p.stocks?.[0]?.quantityMagasin ?? 0) > 0 && (
+                      <Badge variant="outline" className="shadow-sm font-semibold bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
+                        <Store className="h-3 w-3 mr-0.5" />{p.stocks[0].quantityMagasin}
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -166,10 +187,32 @@ function Produits() {
                 </CardContent>
               </div>
               
-              <CardContent className="pt-0 pb-4 space-y-2">
+               <CardContent className="pt-0 pb-4 space-y-2">
                 <Button size="sm" variant="secondary" className="w-full text-xs" onClick={() => handleRestock(p)}>
                   <RotateCw className="mr-1.5 h-3.5 w-3.5" />Réapprovisionner
                 </Button>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center gap-1 rounded-lg border border-dashed border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/10 px-2 py-1">
+                    <Store className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <Input
+                      type="number"
+                      min={1}
+                      value={magasinQty[p.id] ?? 1}
+                      onChange={(e) => setMagasinQty(prev => ({ ...prev, [p.id]: Math.max(1, Number(e.target.value) || 1) }))}
+                      className="h-6 w-12 text-xs text-center border-0 bg-transparent p-0"
+                      placeholder="1"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                      disabled={sendingMagasin[p.id]}
+                      onClick={() => handleSendToMagasin(p)}
+                    >
+                      {sendingMagasin[p.id] ? '...' : '→ Magasin'}
+                    </Button>
+                  </div>
+                </div>
                 <div className="flex gap-2 border-t pt-2">
                   <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => handleEdit(p)}><Pencil className="mr-1 h-3 w-3" />Modifier</Button>
                   <Button size="sm" variant="destructive" className="flex-1 text-xs" onClick={() => handleDelete(p.id)}><Trash2 className="mr-1 h-3 w-3" />Supprimer</Button>

@@ -117,7 +117,7 @@ export default function Remises() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-mono font-medium">
-                      N° {d.saleId.slice(0, 8).toUpperCase()}
+                      N° {d.sale?.invoiceNumber ?? d.saleId.slice(0, 8).toUpperCase()}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">

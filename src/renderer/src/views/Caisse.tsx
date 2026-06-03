@@ -43,6 +43,7 @@ function Caisse() {
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [lastSaleId, setLastSaleId] = useState('')
+  const [lastSaleInvoice, setLastSaleInvoice] = useState('')
   const [printers, setPrinters] = useState<string[]>([])
   const [deviceModal, setDeviceModal] = useState<'scanner' | 'printer' | null>(null)
   const [showNewClient, setShowNewClient] = useState(false)
@@ -108,6 +109,7 @@ function Caisse() {
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.price }))
       })
       setLastSaleId(sale.id)
+      setLastSaleInvoice(sale.invoiceNumber)
       setItems([])
       setDiscount(0)
       setSaleDone(true)
@@ -147,6 +149,7 @@ function Caisse() {
         items: items.map((i) => ({ product: { name: i.name, price: i.price }, quantity: i.quantity })),
         totalAmount: finalTotal,
         saleId: lastSaleId,
+        invoiceNumber: lastSaleInvoice,
         date: new Date().toLocaleString('fr-FR')
       })
     } catch (err) { console.error('Erreur impression', err) }
