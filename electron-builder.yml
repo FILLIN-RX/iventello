@@ -29,19 +29,6 @@ extraResources:
       - "**/*.dll"
       - "**/*.dylib"
 
-linux:
-  icon: src/assets/iventello.png
-  target:
-    - AppImage
-    - deb
-  category: Utility
-
-mac:
-  icon: src/assets/iventello.png
-  target:
-    - dmg
-    - zip
-
 win:
   icon: src/assets/iventello.png
   target:

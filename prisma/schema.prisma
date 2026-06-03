@@ -31,6 +31,7 @@ model Warehouse {
   mobileMoneyCells   MobileMoneyCell[]
   canalPlusCells     CanalPlusCell[]
   canalPlusSales     CanalPlusSale[]
+  serviceSales       ServiceSale[]
   discounts          Discount[]
   magasinTransactions MagasinTransaction[]
 }

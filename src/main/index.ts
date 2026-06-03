@@ -22,6 +22,7 @@ import { createMonthlyReportService } from './services/monthlyReportService'
 import { exportRapportExcel, exportMobileMoneyExcel, exportCanalPlusExcel } from './services/excelExportService'
 import { initAutoUpdater } from './services/autoUpdaterService'
 import { createGlobalStatsService } from './services/globalStatsService'
+import { createServiceSaleService } from './services/serviceSaleService'
 
 let prisma: PrismaClient | null = null
 let mainWindow: BrowserWindow | null = null
@@ -318,6 +319,7 @@ function registerIpcHandlers(): void {
   const canalPlusService = createCanalPlusService(prisma)
   const canalPlusSaleService = createCanalPlusSaleService(prisma)
   const globalStatsService = createGlobalStatsService(prisma)
+  const serviceSaleService = createServiceSaleService(prisma)
 
   ipcMain.handle('db:get-global-stats', () => globalStatsService.getStats())
 
@@ -774,6 +776,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:get-canal-plus-sales', (_e, wid: string, search?: string) => canalPlusSaleService.getAll(wid, search))
   ipcMain.handle('db:get-canal-plus-balance', (_e, wid: string) => cashRegisterService.getCanalPlusBalance(wid))
   ipcMain.handle('db:get-canal-plus-daily-balance', (_e, wid: string) => cashRegisterService.getCanalPlusDailyBalance(wid))
+
+  // Services (photocopie, impression, scan)
+  ipcMain.handle('db:get-service-sales', async (_e, wid: string, search?: string) => {
+    const sales = await serviceSaleService.getAll(wid, search)
+    return sales
+  })
+  ipcMain.handle('db:create-service-sale', async (_e, data) => {
+    const sale = await serviceSaleService.create(data)
+
+    await cashRegisterService.create({
+      type: 'ENTREE',
+      warehouseId: data.warehouseId,
+      totalAmount: data.totalAmount,
+      paymentMethod: 'ESPECES',
+      description: `Service ${data.serviceType} — ${data.description || data.serviceType}${data.clientName ? ` (${data.clientName})` : ''}`,
+      category: 'SERVICES',
+      lines: []
+    })
+
+    return sale
+  })
 
   // Export Excel stylisé (via exceljs)
   ipcMain.handle('export:rapport-excel', async (_e, params) => exportRapportExcel(params))

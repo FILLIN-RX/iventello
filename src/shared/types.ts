@@ -330,6 +330,17 @@ export interface ElectronApi {
   getCanalPlusSales: (warehouseId: string, search?: string) => Promise<CanalPlusSaleWithWarehouse[]>
   getCanalPlusBalance: (warehouseId: string) => Promise<number>
   getCanalPlusDailyBalance: (warehouseId: string) => Promise<number>
+  // Services (photocopie, impression, scan)
+  getServiceSales: (warehouseId: string, search?: string) => Promise<ServiceSaleWithWarehouse[]>
+  createServiceSale: (data: {
+    warehouseId: string
+    serviceType: string
+    description?: string
+    quantity: number
+    unitPrice: number
+    totalAmount: number
+    clientName?: string
+  }) => Promise<ServiceSale & { invoicePath: string }>
   // Exports Excel stylisés
   exportRapportExcel: (params: ExportRapportParams) => Promise<string>
   exportMobileMoneyExcel: (params: ExportMobileMoneyParams) => Promise<string>
@@ -454,6 +465,24 @@ export interface CanalPlusSale {
 }
 
 export interface CanalPlusSaleWithWarehouse extends CanalPlusSale {
+  warehouse: Warehouse
+}
+
+export interface ServiceSale {
+  id: string
+  warehouseId: string
+  serviceType: string
+  description: string | null
+  quantity: number
+  unitPrice: number
+  totalAmount: number
+  clientName: string | null
+  invoiceNumber: string
+  invoicePath: string | null
+  createdAt: string
+}
+
+export interface ServiceSaleWithWarehouse extends ServiceSale {
   warehouse: Warehouse
 }
 

@@ -6,6 +6,7 @@ import {
   Bell, BellDot, ChevronDown, Moon, Sun, Home, Settings as SettingsIcon,
   ArrowLeft, Plus, Receipt, Smartphone, Satellite, Percent,
   CheckCheck, X, Info, AlertOctagon, ShoppingCart as CartIcon,
+  Printer,
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import { useEntrepotStore } from './stores/entrepotStore'
@@ -22,6 +23,7 @@ import Caisse from './views/Caisse'
 import CahierCaisse from './views/CahierCaisse'
 import { MobileMoneySheet } from './views/MobileMoneySheet'
 import { CanalPlus } from './views/CanalPlus'
+import { Services } from './views/Services'
 import Magasin from './views/Magasin'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { FloatingActions } from './components/FloatingActions'
@@ -46,6 +48,7 @@ type WorkspaceView =
   | 'clients' | 'rapports' | 'journal'
   | 'fournisseurs'
   | 'canal-plus'
+  | 'services'
   | 'mobile-money'
   | 'magasin'
 
@@ -75,6 +78,7 @@ const workspaceNav: NavItem[] = [
   { id: 'journal', label: "Journal d'activité", icon: Activity, group: 'analyse' },
   { id: 'mobile-money', label: 'Mobile Money', icon: Smartphone, group: 'analyse' },
   { id: 'canal-plus', label: 'Canal+', icon: Satellite, group: 'analyse' },
+  { id: 'services', label: 'Services', icon: Printer, group: 'commercial' },
 ]
 
 const GROUP_LABELS: Record<string, string> = {
@@ -90,6 +94,7 @@ const VIEW_TITLES: Record<string, string> = {
   clients: 'Clients', remises: 'Remises', rapports: 'Rapports', journal: "Journal d'activité",
   fournisseurs: 'Fournisseurs',
   'canal-plus': 'Canal+',
+  services: 'Services (Photocopie, Impression, Scan)',
   magasin: 'Magasin',
 }
 
@@ -397,6 +402,7 @@ export default function App() {
               {workspaceView === 'journal' && <ActivityLog />}
               {workspaceView === 'mobile-money' && <MobileMoneySheet />}
               {workspaceView === 'canal-plus' && <CanalPlus />}
+              {workspaceView === 'services' && <Services />}
               {workspaceView === 'magasin' && <Magasin />}
               {workspaceView === 'fournisseurs' && <Fournisseurs />}
             </>

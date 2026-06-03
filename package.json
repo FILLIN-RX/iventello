@@ -12,7 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "publish": "electron-vite build && electron-builder --win --linux -p always"
+    "publish": "electron-vite build && electron-builder -w -l -p always"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
