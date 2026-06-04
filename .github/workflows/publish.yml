@@ -25,19 +25,7 @@ jobs:
 
       - name: Package
         shell: bash
-        run: |
-          set -x
-          node node_modules/electron-builder/cli.js --win --config electron-builder.yml 2>&1 | tee package.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          set +x
-          echo "=== EXIT CODE: $EXIT_CODE ==="
-          exit $EXIT_CODE
-
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: package-logs
-          path: package.log
+        run: npx electron-builder --win --config electron-builder.yml --publish never
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v2
