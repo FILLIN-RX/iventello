@@ -25,7 +25,15 @@ jobs:
 
       - name: Package
         shell: bash
-        run: npx electron-builder --win --config electron-builder.yml
+        run: |
+          npx electron-builder --win --config electron-builder.yml 2>&1 | tee package.log
+          exit ${PIPESTATUS[0]}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: package-logs
+          path: package.log
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v2
