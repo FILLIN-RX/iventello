@@ -19,8 +19,7 @@ export default defineConfig({
     server: {
       fs: {
         allow: [
-          resolve('src/renderer'),
-          resolve('node_modules/luckysheet/dist')
+          resolve('src/renderer')
         ]
       }
     }
