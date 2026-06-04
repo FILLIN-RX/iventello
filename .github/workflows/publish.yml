@@ -7,10 +7,7 @@ on:
 
 jobs:
   release:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -20,20 +17,15 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libarchive-tools
-
       - run: npm ci
 
       - name: Build
+        shell: bash
         run: npm run build
 
       - name: Package
         shell: bash
-        run: npx electron-builder --${{ matrix.os == 'windows-latest' && 'win' || 'linux' }} --config electron-builder.yml
+        run: npx electron-builder --win --config electron-builder.yml
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v2
@@ -43,7 +35,5 @@ jobs:
             dist/*.exe
             dist/*.exe.blockmap
             dist/*Setup*.exe
-            dist/*.AppImage
-            dist/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
