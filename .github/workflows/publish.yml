@@ -19,21 +19,17 @@ jobs:
 
       - run: npm ci
 
-      - name: Debug info
-        shell: bash
-        run: |
-          echo "Node: $(node -v)"
-          echo "NPM: $(npm -v)"
-          echo "--- Prisma generate ---"
-          npx prisma generate 2>&1
-          echo "--- electron-vite version ---"
-          npx electron-vite --version 2>&1 || true
-          echo "--- Files in node_modules/.bin ---"
-          ls -la node_modules/.bin/ | head -20
-
       - name: Build
         shell: bash
-        run: npm run build 2>&1 || { echo "=== EJECTRON-VITE BUILD FAILED ==="; exit 1; }
+        run: |
+          npx electron-vite build 2>&1 | tee build.log
+          exit ${PIPESTATUS[0]}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: build.log
 
       - name: Package
         shell: bash
