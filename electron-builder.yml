@@ -16,9 +16,10 @@ files:
 
 asar: true
 asarUnpack:
-  - "@prisma/client/**"
-  - "@prisma/engines/**"
-  - ".prisma/client/**"
+  - "**/*.node"
+  - "**/*.dll"
+  - "**/*.so"
+  - "**/*.dylib"
 
 extraResources:
   - from: "node_modules/@prisma/engines/"
