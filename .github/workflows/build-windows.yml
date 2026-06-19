@@ -1,0 +1,42 @@
+name: Build Windows (portable + installer)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branche à builder'
+        required: true
+        default: 'main'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build Electron app
+        run: npm run build
+
+      - name: Package with electron-builder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --config electron-builder.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iventello-windows-build
+          path: dist/
