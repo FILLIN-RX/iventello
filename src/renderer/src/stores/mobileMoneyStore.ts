@@ -153,6 +153,6 @@ export const useMobileMoneyStore = create<MmState>((set, get) => ({
       totalCommissions: getTotalCommissions(r),
       soldeReelAjuste: getSoldeReelAjuste(r)
     }))
-    await window.api.exportMobileMoneySheet(warehouseId, key, exportData)
+    await window.api.exportMobileMoneyExcel(warehouseId, key, exportData)
   }
 }))

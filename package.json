@@ -5,14 +5,18 @@
   "main": "./out/main/index.js",
   "author": "RUXEL DJEUTCHOU <djeutchouruxel@exemple.com>",
   "scripts": {
-    "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
+    "dev": "ELECTRON_DISABLE_SANDBOX=1 ELECTRON_DISABLE_GPU=1 electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "electron-vite build && electron-builder --win",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit --pretty",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -22,6 +26,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-log": "^5.4.4",
@@ -38,6 +43,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Switch } from './ui/switch'
-import { Select } from './ui/select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import {
   Dialog,
   DialogContent,
@@ -138,10 +138,15 @@ export function ReapprovisionnementModal({ open, onClose, product, warehouseId, 
                 <div className="space-y-1.5">
                   <Label>Mode de paiement</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <option value="ESPECES">Espèces</option>
-                    <option value="OM">Orange Money</option>
-                    <option value="MTN">MTN Mobile Money</option>
-                    <option value="CARTE">Carte bancaire</option>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ESPECES">Espèces</SelectItem>
+                      <SelectItem value="OM">Orange Money</SelectItem>
+                      <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                      <SelectItem value="CARTE">Carte bancaire</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
 

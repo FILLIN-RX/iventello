@@ -59,7 +59,23 @@ export function createCashRegisterService(prisma: PrismaClient) {
       return result._sum.totalAmount ?? 0
     },
 
-    async getTransactions(warehouseId: string) {
+    async getTransactions(warehouseId: string, page?: number, pageSize?: number) {
+      if (page && pageSize) {
+        const [transactions, total] = await Promise.all([
+          prisma.cashTransaction.findMany({
+            where: { warehouseId },
+            include: {
+              lines: { include: { product: true } },
+              warehouse: true
+            },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * pageSize,
+            take: pageSize
+          }),
+          prisma.cashTransaction.count({ where: { warehouseId } })
+        ])
+        return { transactions, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+      }
       return prisma.cashTransaction.findMany({
         where: { warehouseId },
         include: {
@@ -96,28 +112,30 @@ export function createCashRegisterService(prisma: PrismaClient) {
       })
 
       // Impact stock (sauf pour Canal+ qui n'affecte pas le stock physique)
-      if (data.category !== 'CANAL_PLUS') {
-        for (const line of data.lines) {
-          const stock = await prisma.stock.findFirst({
-            where: { productId: line.productId, warehouseId: data.warehouseId }
-          })
-          if (stock) {
+      if (data.category !== 'CANAL_PLUS' && data.lines.length > 0) {
+        await prisma.$transaction(async (tx) => {
+          for (const line of data.lines) {
+            const stock = await tx.stock.findFirst({
+              where: { productId: line.productId, warehouseId: data.warehouseId }
+            })
             const qtyChange = data.type === 'ENTREE' ? -line.quantity : line.quantity
-            await prisma.stock.update({
-              where: { id: stock.id },
-              data: { quantity: { increment: qtyChange } }
-            })
-          } else if (data.type === 'SORTIE') {
-            await prisma.stock.create({
-              data: {
-                productId: line.productId,
-                warehouseId: data.warehouseId,
-                quantity: line.quantity,
-                alertLimit: 5
-              }
-            })
+            if (stock) {
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: { quantity: { increment: qtyChange } }
+              })
+            } else if (data.type === 'SORTIE') {
+              await tx.stock.create({
+                data: {
+                  productId: line.productId,
+                  warehouseId: data.warehouseId,
+                  quantity: line.quantity,
+                  alertLimit: 5
+                }
+              })
+            }
           }
-        }
+        })
       }
 
       return transaction

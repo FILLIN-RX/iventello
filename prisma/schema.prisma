@@ -7,6 +7,40 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model User {
+  id                String          @id @default(uuid())
+  email             String          @unique
+  passwordHash      String
+  nom               String
+  prenom            String
+  role              String          @default("EMPLOYE")
+  avatarUrl         String?
+  phone             String?
+  commissionRate    Float           @default(0) // Taux de commission en % (pour les agents)
+  notes             String?
+  active            Boolean         @default(true)
+
+  // Cloud-ready fields (placeholders for future)
+  externalId        String?         @unique
+  cloudSyncedAt     DateTime?
+
+  warehouseAccess   UserWarehouse[]
+  agentSales        Sale[]          @relation("AgentSales") // Ventes liées à cet agent
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model UserWarehouse {
+  id          String    @id @default(uuid())
+  userId      String
+  warehouseId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, warehouseId])
+}
+
 model Warehouse {
   id                 String             @id @default(uuid())
   name               String
@@ -34,6 +68,7 @@ model Warehouse {
   serviceSales       ServiceSale[]
   discounts          Discount[]
   magasinTransactions MagasinTransaction[]
+  userAccess         UserWarehouse[]
 }
 
 model Supplier {
@@ -98,6 +133,11 @@ model Product {
   saleItems         SaleItem[]
   cashTransactionLines CashTransactionLine[]
   magasinTransactions MagasinTransaction[]
+
+  @@index([name])
+  @@index([createdAt])
+  @@index([supplierId])
+  @@index([categoryId])
 }
 
 model Category {
@@ -116,6 +156,8 @@ model Expense {
   category    String
   date        DateTime @default(now())
   description String?
+
+  @@index([date])
 }
 
 model Stock {
@@ -124,6 +166,7 @@ model Stock {
   warehouseId      String
   quantity         Int      @default(0)
   quantityMagasin  Int      @default(0)
+  quantityReservee Int      @default(0) // Stock mis de côté (avance client)
   alertLimit       Int      @default(5)
   shelfLocation    String?
 
@@ -131,6 +174,8 @@ model Stock {
   warehouse        Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([productId, warehouseId])
+  @@index([warehouseId])
+  @@index([alertLimit])
 }
 
 model MagasinTransaction {
@@ -143,24 +188,40 @@ model MagasinTransaction {
 
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([productId])
 }
 
 model Sale {
-  id            String     @id @default(uuid())
-  warehouseId   String
-  clientId      String?
-  invoiceNumber String
-  subTotal      Float
-  vatTotal      Float
-  discount      Float      @default(0)
-  finalTotal    Float
-  paymentMethod String
-  createdAt     DateTime   @default(now())
+  id               String     @id @default(uuid())
+  warehouseId      String
+  clientId         String?
+  invoiceNumber    String
+  subTotal         Float
+  vatTotal         Float
+  discount         Float      @default(0)
+  finalTotal       Float
+  montantAvance    Float?     // Montant versé pour une avance (si différent du total)
+  paymentMethod    String
+  status           String     @default("EN_ATTENTE") // EN_ATTENTE | VALIDE | PAYE | ANNULE
+  agentId          String?
+  commissionAmount Float?     // Commission agent calculée à la validation
+  validatedAt      DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime   @default(now())
 
-  warehouse     Warehouse  @relation(fields: [warehouseId], references: [id])
-  client        Client?    @relation(fields: [clientId], references: [id])
-  items         SaleItem[]
-  discounts     Discount[]
+  warehouse        Warehouse  @relation(fields: [warehouseId], references: [id])
+  client           Client?    @relation(fields: [clientId], references: [id])
+  agent            User?      @relation("AgentSales", fields: [agentId], references: [id])
+  items            SaleItem[]
+  discounts        Discount[]
+
+  @@index([createdAt])
+  @@index([warehouseId])
+  @@index([clientId])
+  @@index([status])
+  @@index([agentId])
 }
 
 model SaleItem {
@@ -172,6 +233,9 @@ model SaleItem {
 
   sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
 }
 
 model CashTransaction {
@@ -187,6 +251,9 @@ model CashTransaction {
 
   warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
   lines         CashTransactionLine[]
+
+  @@index([warehouseId])
+  @@index([createdAt])
 }
 
 model CashTransactionLine {
@@ -199,6 +266,9 @@ model CashTransactionLine {
 
   transaction   CashTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   product       Product         @relation(fields: [productId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
 }
 
 model Discount {
@@ -211,6 +281,9 @@ model Discount {
 
   sale        Sale      @relation(fields: [saleId], references: [id])
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([warehouseId])
+  @@index([saleId])
 }
 
 model AppSettings {

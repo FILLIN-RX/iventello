@@ -15,6 +15,7 @@ export default function Achats() {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [toMagasin, setToMagasin] = useState<Record<string, boolean>>({})
+  const [unitPrices, setUnitPrices] = useState<Record<string, string>>({})
 
   async function handleAnalyze() {
     try {
@@ -45,7 +46,7 @@ export default function Achats() {
           productId: i.productId,
           productName: i.productName,
           quantity: i.suggestedQuantity,
-          unitPrice: 0, // prix d'achat à définir
+          unitPrice: parseFloat(unitPrices[i.productId]) || 0,
           sendToMagasin: !!toMagasin[i.productId]
         }))
       })
@@ -165,6 +166,18 @@ export default function Achats() {
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs text-muted-foreground">Stock actuel / Seuil</p>
                         <p className="font-semibold text-rose-600 text-sm">{o.currentStock} / {o.alertLimit}</p>
+                        <div className="mt-2">
+                          <label className="text-xs text-muted-foreground">Prix unitaire</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={unitPrices[o.productId] ?? ''}
+                            onChange={(e) => setUnitPrices(prev => ({ ...prev, [o.productId]: e.target.value }))}
+                            placeholder="0"
+                            className="mt-0.5 w-full rounded border px-2 py-1 text-right text-xs"
+                          />
+                        </div>
                         <div className={cn(
                           'mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold text-white',
                           isMagasin ? 'bg-amber-600' : 'bg-primary'

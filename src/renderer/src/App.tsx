@@ -6,13 +6,16 @@ import {
   Bell, BellDot, ChevronDown, Moon, Sun, Home, Settings as SettingsIcon,
   ArrowLeft, Plus, Receipt, Smartphone, Satellite, Percent,
   CheckCheck, X, Info, AlertOctagon, ShoppingCart as CartIcon,
-  Printer,
+  Printer, UserCheck,
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import { useEntrepotStore } from './stores/entrepotStore'
 import { useNotifications, typeToColor } from './stores/notificationStore'
 import { useWarehouses } from './hooks/useWarehouses'
 import { setGlobalNav } from './hooks/useNavigate'
+import { useAuthStore } from './stores/authStore'
+import { OnboardingWizard } from './components/OnboardingWizard'
+import { LoginScreen } from './components/LoginScreen'
 
 import Dashboard from './views/Dashboard'
 import Produits from './views/Produits'
@@ -35,11 +38,12 @@ import Clients from './views/Clients'
 import Rapports from './views/Rapports'
 import ActivityLog from './views/ActivityLog'
 import Fournisseurs from './views/Fournisseurs'
+import Agents from './views/Agents'
 import Entrepots from './views/Entrepots'
 import Accueil from './views/Accueil'
 import SettingsView from './views/Settings'
 
-type MainView = 'accueil' | 'entrepots' | 'settings'
+type MainView = 'accueil' | 'entrepots' | 'settings' | 'agents'
 type WorkspaceView =
   | 'dashboard' | 'produits' | 'categories'
   | 'stock-faible' | 'rupture' | 'caisse'
@@ -47,6 +51,7 @@ type WorkspaceView =
   | 'remises'
   | 'clients' | 'rapports' | 'journal'
   | 'fournisseurs'
+  | 'agents'
   | 'canal-plus'
   | 'services'
   | 'mobile-money'
@@ -93,6 +98,7 @@ const VIEW_TITLES: Record<string, string> = {
   'cahier-caisse': 'Cahier de caisse', 'mobile-money': 'Mobile Money', factures: 'Factures', achats: 'Achats', depenses: 'Dépenses',
   clients: 'Clients', remises: 'Remises', rapports: 'Rapports', journal: "Journal d'activité",
   fournisseurs: 'Fournisseurs',
+  agents: 'Agents commerciaux',
   'canal-plus': 'Canal+',
   services: 'Services (Photocopie, Impression, Scan)',
   magasin: 'Magasin',
@@ -108,20 +114,44 @@ function getInitialTheme(): boolean {
 const mainNav = [
   { id: 'accueil' as const, label: 'Accueil', icon: Home },
   { id: 'entrepots' as const, label: 'Entrepôts', icon: WarehouseIcon },
+  { id: 'agents' as const, label: 'Agents', icon: UserCheck },
   { id: 'settings' as const, label: 'Paramètres', icon: SettingsIcon },
 ]
 
 export default function App() {
+  const { user, isAuthenticated, isLoading, checkSession } = useAuthStore()
+  const { hasRole } = useAuthStore()
+  const [hasUsers, setHasUsers] = useState<boolean | null>(null)
+  
+  // Tous les hooks sont appelés ici, au niveau supérieur
   const { selectedId, selectedName, clear, workspaceView, setWorkspaceView } = useEntrepotStore()
   const [mainView, setMainView] = useState<MainView>('accueil')
   const [dark, setDark] = useState(getInitialTheme)
   const isWorkspace = selectedId !== null
 
+  
+  // Define what's allowed for each role
+  const isAllowed = (viewId: WorkspaceView) => {
+    if (!user) return false
+    if (user.role === 'PROPRIETAIRE') return true
+    if (user.role === 'MANAGER') return !['settings', 'journal', 'entrepots'].includes(viewId)
+    if (user.role === 'CAISSIER') return ['caisse', 'cahier-caisse', 'factures', 'clients', 'services'].includes(viewId)
+    if (user.role === 'EMPLOYE') return ['caisse', 'produits', 'clients', 'services'].includes(viewId)
+    if (user.role === 'AGENT') return ['caisse', 'produits', 'clients', 'factures'].includes(viewId)
+    return false
+  }
+
+  // Filter nav items based on role
+  const filteredWorkspaceNav = workspaceNav.filter(item => isAllowed(item.id))
+
+  useEffect(() => {
+    checkSession()
+    window.api.auth.hasUsers().then(setHasUsers)
+  }, [])
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
-
   useEffect(() => {
     setGlobalNav((target) => {
       if (target.type === 'main') {
@@ -132,14 +162,12 @@ export default function App() {
       }
     })
   }, [clear])
-
   useEffect(() => {
     const { checkAlerts } = useNotifications.getState()
     checkAlerts()
     const interval = setInterval(checkAlerts, 30_000)
     return () => clearInterval(interval)
   }, [])
-
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
@@ -149,19 +177,32 @@ export default function App() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
-
   const { warehouses, refetch } = useWarehouses()
-
   useEffect(() => { if (selectedId) refetch() }, [selectedId])
+  const { notifications, unreadCount, markRead, markAllRead, dismiss } = useNotifications()
+
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  if (isLoading || hasUsers === null) return <div className="flex h-screen items-center justify-center">Chargement...</div>
+
+  if (!hasUsers) return <OnboardingWizard onComplete={() => window.location.reload()} />
+  if (!isAuthenticated) return <LoginScreen />
+
+
   const selectedWarehouse = warehouses.find((w) => w.id === selectedId)
   const hasMobileMoney = selectedWarehouse?.mobileMoneyEnabled ?? false
 
   const groups = ['principal', 'catalogue', 'stock', 'commercial', 'relations', 'analyse']
   const currentTitle = isWorkspace ? VIEW_TITLES[workspaceView] ?? workspaceView : VIEW_TITLES[mainView]
-  const { notifications, unreadCount, markRead, markAllRead, dismiss } = useNotifications()
-  const [notifOpen, setNotifOpen] = useState(false)
-  const notifRef = useRef<HTMLDivElement>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // Seuls PROPRIETAIRE et MANAGER voient la gestion des agents et paramètres
+  const canManage = user?.role === 'PROPRIETAIRE' || user?.role === 'MANAGER'
+  const filteredMainNav = mainNav.filter(item => {
+    if (item.id === 'agents' || item.id === 'settings' || item.id === 'entrepots') return canManage
+    return true
+  })
+
 
   function handleBackToList() {
     clear()
@@ -191,11 +232,12 @@ export default function App() {
           {isWorkspace ? (
             <>
               {groups.map(group => {
-                const items = workspaceNav
+                const items = filteredWorkspaceNav
                   .filter(n => n.group === group)
                   .filter(n => n.id !== 'mobile-money' || hasMobileMoney)
                 return (
                   <div key={group} className="mb-1">
+
                     {GROUP_LABELS[group] && (
                       <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         {GROUP_LABELS[group]}
@@ -225,7 +267,7 @@ export default function App() {
             </>
           ) : (
             <>
-              {mainNav.map((item) => {
+              {filteredMainNav.map((item) => {
                 const isActive = mainView === item.id
                 return (
                   <button
@@ -405,11 +447,13 @@ export default function App() {
               {workspaceView === 'services' && <Services />}
               {workspaceView === 'magasin' && <Magasin />}
               {workspaceView === 'fournisseurs' && <Fournisseurs />}
+              {workspaceView === 'agents' && <Agents />}
             </>
           ) : (
             <>
               {mainView === 'accueil' && <Accueil />}
               {mainView === 'entrepots' && <Entrepots />}
+              {mainView === 'agents' && <Agents />}
               {mainView === 'settings' && <SettingsView />}
             </>
           )}

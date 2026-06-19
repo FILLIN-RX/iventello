@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ShoppingCart, Plus, Minus, Trash2, Barcode, Printer, User, UserPlus } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, Trash2, Barcode, Printer, User, UserPlus, UserCheck, Clock } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 import { useWarehouses } from '../hooks/useWarehouses'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { useEntrepotStore } from '../stores/entrepotStore'
 import { useNotifications } from '../stores/notificationStore'
 import { formatCurrency } from '@/lib/utils'
-import type { ProductWithRelations, Warehouse, Client } from '../../../shared/types'
+import type { ProductWithRelations, Warehouse, Client, User as AgentUser } from '../../../shared/types'
 
 interface CartItem {
   productId: string
@@ -23,6 +23,7 @@ interface CartItem {
   price: number
   quantity: number
   stock: number
+  vatRate: number
 }
 
 function Caisse() {
@@ -31,7 +32,7 @@ function Caisse() {
   const { selectedId: workspaceId, selectedName: workspaceName } = useEntrepotStore()
   const [items, setItems] = useState<CartItem[]>([])
   const [warehouseId, setWarehouseId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('Cash')
+  const [paymentMethod, setPaymentMethod] = useState('ESPECES')
   const [discount, setDiscount] = useState(0)
   const [clientSearch, setClientSearch] = useState('')
   const [clients, setClients] = useState<Client[]>([])
@@ -40,22 +41,37 @@ function Caisse() {
   const [validating, setValidating] = useState(false)
   const [applyVat, setApplyVat] = useState(true)
   const [saleDone, setSaleDone] = useState(false)
+  const [saleError, setSaleError] = useState<string | null>(null)
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [lastSaleId, setLastSaleId] = useState('')
   const [lastSaleInvoice, setLastSaleInvoice] = useState('')
+  const [lastPrintData, setLastPrintData] = useState<{ items: CartItem[]; total: number } | null>(null)
   const [printers, setPrinters] = useState<string[]>([])
   const [deviceModal, setDeviceModal] = useState<'scanner' | 'printer' | null>(null)
   const [showNewClient, setShowNewClient] = useState(false)
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
   const [newClientEmail, setNewClientEmail] = useState('')
+  // Avance / agent
+  const [isAvance, setIsAvance] = useState(false)
+  const [montantAvance, setMontantAvance] = useState<number>(0)
+  const [agents, setAgents] = useState<AgentUser[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
   const { checkScanner, testScanner, testPrinter } = useDeviceCheck()
 
   useEffect(() => {
     if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id)
     if (!checkScanner()) setDeviceModal('scanner')
   }, [warehouses])
+
+  useEffect(() => {
+    window.api.getAgents().then((a: any) => setAgents(a)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setMontantAvance(finalTotal)
+  }, [isAvance, finalTotal])
 
   useBarcodeScanner(async (barcode) => {
     const found = products.find((p) => p.barcode === barcode)
@@ -72,7 +88,8 @@ function Caisse() {
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === p.id)
       if (existing) return prev.map((i) => i.productId === p.id ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { productId: p.id, name: p.name, price: p.sellingPrice, quantity: 1, stock: p.stocks?.[0]?.quantity ?? 0 }]
+      const stock = p.stocks?.find((s) => s.warehouseId === warehouseId)?.quantity ?? 0
+      return [...prev, { productId: p.id, name: p.name, price: p.sellingPrice, quantity: 1, stock, vatRate: p.vatRate }]
     })
   }
 
@@ -82,15 +99,15 @@ function Caisse() {
   }
 
   const subTotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
-  const vatTotal = applyVat ? subTotal * 0.1925 : 0
+  const vatTotal = applyVat ? items.reduce((s, i) => s + i.price * i.quantity * (i.vatRate / 100), 0) : 0
   const finalTotal = subTotal + vatTotal - discount
 
   async function searchClient(q: string) {
     setClientSearch(q)
     if (q.length < 2) { setClients([]); return }
     try {
-      const all = await window.api.getClients() as any[]
-      setClients(all.filter((c: any) => c.client.name.toLowerCase().includes(q.toLowerCase())).map((c: any) => c.client))
+      const results = await window.api.searchClients(q) as any[]
+      setClients(results.map((c: any) => c.client))
     } catch { /* ignore */ }
   }
 
@@ -98,6 +115,10 @@ function Caisse() {
     if (items.length === 0 || !warehouseId) return
     try {
       setValidating(true)
+      setSaleError(null)
+
+      const saleStatus = isAvance ? 'EN_ATTENTE' : 'VALIDE'
+
       const sale = await window.api.createSale({
         warehouseId,
         clientId: selectedClient?.id ?? null,
@@ -106,17 +127,21 @@ function Caisse() {
         discount,
         finalTotal,
         paymentMethod,
+        status: saleStatus,
+        agentId: selectedAgentId || null,
+        montantAvance: isAvance ? montantAvance : undefined,
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.price }))
       })
       setLastSaleId(sale.id)
       setLastSaleInvoice(sale.invoiceNumber)
+      setLastPrintData({ items: [...items], total: finalTotal })
       setItems([])
       setDiscount(0)
       setSaleDone(true)
       useNotifications.getState().addNotification({
         type: 'vente',
         title: 'Nouvelle vente',
-        description: `Vente de ${formatCurrency(subTotal)} — ${items.length} article${items.length > 1 ? 's' : ''}${selectedClient ? ` — ${selectedClient.name}` : ''}`,
+        description: `Vente de ${formatCurrency(subTotal)} — ${items.length} article${items.length > 1 ? 's' : ''}${selectedClient ? ` — ${selectedClient.name}` : ''}${isAvance ? ' (avance)' : ''}`,
         warehouseId: workspaceId ?? undefined,
         warehouseName: workspaceName ?? undefined,
         meta: { montant: finalTotal, articles: items.length, client: selectedClient?.name ?? '' }
@@ -125,7 +150,9 @@ function Caisse() {
       setPrinters(p)
       if (p.length > 0) setShowPrintDialog(true)
       else setDeviceModal('printer')
-    } catch (err) { console.error('Erreur vente', err) }
+    } catch (err) {
+      setSaleError(err instanceof Error ? err.message : 'Erreur lors de la vente')
+    }
     finally { setValidating(false) }
   }
 
@@ -144,10 +171,11 @@ function Caisse() {
   }
 
   async function handlePrint() {
+    if (!lastPrintData) return
     try {
       await window.api.printReceipt({
-        items: items.map((i) => ({ product: { name: i.name, price: i.price }, quantity: i.quantity })),
-        totalAmount: finalTotal,
+        items: lastPrintData.items.map((i) => ({ product: { name: i.name, price: i.price }, quantity: i.quantity })),
+        totalAmount: lastPrintData.total,
         saleId: lastSaleId,
         invoiceNumber: lastSaleInvoice,
         date: new Date().toLocaleString('fr-FR')
@@ -171,23 +199,27 @@ function Caisse() {
             {products.length === 0 && <p className="text-muted-foreground">Aucun produit en base.</p>}
             {products.length > 0 && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {products.map((p) => (
-                  <Card key={p.id} className="cursor-pointer hover:shadow-md">
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div>
-                        <p className="font-medium">{p.name}</p>
-                        <p className="text-sm text-muted-foreground">{formatCurrency(p.sellingPrice)}</p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <Badge variant={p.stocks?.[0]?.quantity <= p.stocks?.[0]?.alertLimit ? 'destructive' : 'default'} className="text-xs">Stock: {p.stocks?.[0]?.quantity ?? 0}</Badge>
-                          <span className="text-xs text-muted-foreground">{p.barcode}</span>
+                {products.map((p) => {
+                  const stockQty = p.stocks?.find((s) => s.warehouseId === warehouseId)?.quantity ?? 0
+                  const alertLimit = p.stocks?.find((s) => s.warehouseId === warehouseId)?.alertLimit ?? 0
+                  return (
+                    <Card key={p.id} className="cursor-pointer hover:shadow-md">
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <p className="font-medium">{p.name}</p>
+                          <p className="text-sm text-muted-foreground">{formatCurrency(p.sellingPrice)}</p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <Badge variant={stockQty <= alertLimit ? 'destructive' : 'default'} className="text-xs">Stock: {stockQty}</Badge>
+                            <span className="text-xs text-muted-foreground">{p.barcode}</span>
+                          </div>
                         </div>
-                      </div>
-                      <Button size="icon" onClick={() => addItem(p)} disabled={(p.stocks?.[0]?.quantity ?? 0) <= 0}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                        <Button size="icon" onClick={() => addItem(p)} disabled={stockQty <= 0}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -245,6 +277,53 @@ function Caisse() {
                 )}
               </div>
 
+            {/* Agent */}
+            {agents.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5" /> Agent commercial</Label>
+                <Select value={selectedAgentId} onValueChange={(val) => setSelectedAgentId(val)}>
+                  <SelectTrigger><SelectValue placeholder="Aucun agent" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Aucun agent</SelectItem>
+                    {agents.filter(a => a.active).map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.prenom} {a.nom} {a.commissionRate > 0 ? `(${a.commissionRate}%)` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Mode avance */}
+            <div className="flex items-center gap-2 rounded-md border p-3">
+              <input id="isAvance" type="checkbox" checked={isAvance} onChange={(e) => setIsAvance(e.target.checked)} className="h-4 w-4 rounded border-muted text-primary focus:ring-primary" />
+              <Label htmlFor="isAvance" className="text-sm cursor-pointer flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-amber-500" /> Avance client (stock réservé)
+              </Label>
+            </div>
+            {isAvance && (
+              <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20 p-3">
+                <Label className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                  Montant versé (avance)
+                </Label>
+                <Input
+                  type="number" min="0" step="1"
+                  value={montantAvance}
+                  onChange={(e) => setMontantAvance(parseFloat(e.target.value) || 0)}
+                  className="border-amber-300 dark:border-amber-700"
+                />
+                {montantAvance < finalTotal && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Reste à payer : {formatCurrency(finalTotal - montantAvance)}
+                  </p>
+                )}
+                {montantAvance > finalTotal && (
+                  <p className="text-xs text-destructive">
+                    Le montant versé ne peut pas dépasser le total
+                  </p>
+                )}
+              </div>
+            )}
+
             {items.length === 0 && <p className="text-center text-sm text-muted-foreground">Panier vide.</p>}
             {items.map((item) => (
               <div key={item.productId} className="flex items-center justify-between rounded border p-3">
@@ -266,16 +345,16 @@ function Caisse() {
               <Select value={paymentMethod} onValueChange={(val) => setPaymentMethod(val)}>
                 <SelectTrigger><SelectValue placeholder="Espèces" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Cash">Espèces</SelectItem>
-                  <SelectItem value="Mobile Money">Mobile Money</SelectItem>
-                  <SelectItem value="Carte">Carte bancaire</SelectItem>
+                  <SelectItem value="ESPECES">Espèces</SelectItem>
+                  <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
+                  <SelectItem value="CARTE_BANCAIRE">Carte bancaire</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="flex items-center gap-2">
               <input id="applyVat" type="checkbox" checked={applyVat} onChange={(e) => setApplyVat(e.target.checked)} className="h-4 w-4 rounded border-muted text-primary focus:ring-primary" />
-              <Label htmlFor="applyVat" className="text-sm cursor-pointer">Appliquer TVA (19.25%)</Label>
+              <Label htmlFor="applyVat" className="text-sm cursor-pointer">Appliquer TVA</Label>
             </div>
 
             {discount > 0 && (
@@ -287,14 +366,19 @@ function Caisse() {
             <Button variant="ghost" size="sm" onClick={() => setDiscount(5)} className="text-xs">+ Remise</Button>
           </CardContent>
           <CardFooter className="flex-col gap-3">
+            {saleError && (
+              <div className="w-full rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {saleError}
+              </div>
+            )}
             <div className="w-full space-y-1 text-sm">
               <div className="flex justify-between"><span>Sous-total</span><span>{formatCurrency(subTotal)}</span></div>
-              {applyVat && <div className="flex justify-between text-muted-foreground"><span>TVA (19.25%)</span><span>{formatCurrency(vatTotal)}</span></div>}
+              {applyVat && <div className="flex justify-between text-muted-foreground"><span>TVA</span><span>{formatCurrency(vatTotal)}</span></div>}
               {discount > 0 && <div className="flex justify-between text-destructive"><span>Remise</span><span>-{formatCurrency(discount)}</span></div>}
               <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total</span><span>{formatCurrency(finalTotal)}</span></div>
             </div>
-            <Button className="w-full" size="lg" disabled={items.length === 0 || validating || !warehouseId} onClick={handleValidate}>
-              {validating ? 'Validation...' : saleDone ? '✓ Vente enregistrée' : 'Valider la vente'}
+            <Button className="w-full" size="lg" disabled={items.length === 0 || validating || !warehouseId || (isAvance && montantAvance > finalTotal)} onClick={handleValidate}>
+              {validating ? 'Validation...' : saleDone ? '✓ Vente enregistrée' : isAvance ? 'Enregistrer l\'avance' : 'Valider la vente'}
             </Button>
           </CardFooter>
         </Card>

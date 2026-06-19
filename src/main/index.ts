@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } from 'electron'
-import { join, extname } from 'node:path'
+import { join, extname, resolve } from 'node:path'
 import { copyFileSync, mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { PrismaClient } from '@prisma/client'
@@ -23,6 +23,8 @@ import { exportRapportExcel, exportMobileMoneyExcel, exportCanalPlusExcel } from
 import { initAutoUpdater } from './services/autoUpdaterService'
 import { createGlobalStatsService } from './services/globalStatsService'
 import { createServiceSaleService } from './services/serviceSaleService'
+import { createAuthService } from './services/authService'
+import { sessionService } from './services/sessionService'
 
 let prisma: PrismaClient | null = null
 let mainWindow: BrowserWindow | null = null
@@ -65,6 +67,29 @@ async function initDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Warehouse" (
       "id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "location" TEXT, "logoUrl" TEXT, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`)
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "User" (
+      "id" TEXT PRIMARY KEY, 
+      "email" TEXT NOT NULL UNIQUE, 
+      "passwordHash" TEXT NOT NULL, 
+      "nom" TEXT NOT NULL, 
+      "prenom" TEXT NOT NULL, 
+      "role" TEXT NOT NULL DEFAULT 'EMPLOYE', 
+      "avatarUrl" TEXT, 
+      "externalId" TEXT UNIQUE, 
+      "cloudSyncedAt" DATETIME, 
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`)
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "UserWarehouse" (
+      "id" TEXT PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "warehouseId" TEXT NOT NULL,
+      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id") ON DELETE CASCADE,
+      UNIQUE ("userId", "warehouseId")
     )`)
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Supplier" (
@@ -225,6 +250,54 @@ async function initDatabase(): Promise<void> {
       FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id") ON DELETE CASCADE
     )`)
 
+  // Migration : ajouter les champs agent à User
+  try {
+    const userCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("User")`)
+    if (!userCols.some((c: any) => c.name === 'phone')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "phone" TEXT`)
+    }
+    if (!userCols.some((c: any) => c.name === 'commissionRate')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "commissionRate" REAL NOT NULL DEFAULT 0`)
+    }
+    if (!userCols.some((c: any) => c.name === 'notes')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "notes" TEXT`)
+    }
+    if (!userCols.some((c: any) => c.name === 'active')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "active" INTEGER NOT NULL DEFAULT 1`)
+    }
+  } catch { /* ignorer */ }
+
+  // Migration : ajouter quantityReservee à Stock
+  try {
+    const sCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Stock")`)
+    if (!sCols.some((c: any) => c.name === 'quantityReservee')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Stock" ADD COLUMN "quantityReservee" INTEGER NOT NULL DEFAULT 0`)
+    }
+  } catch { /* ignorer */ }
+
+  // Migration : ajouter status, agentId, commissionAmount, validatedAt, paidAt à Sale
+  try {
+    const saleCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Sale")`)
+    if (!saleCols.some((c: any) => c.name === 'status')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'EN_ATTENTE'`)
+    }
+    if (!saleCols.some((c: any) => c.name === 'agentId')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "agentId" TEXT REFERENCES "User"("id")`)
+    }
+    if (!saleCols.some((c: any) => c.name === 'commissionAmount')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "commissionAmount" REAL`)
+    }
+    if (!saleCols.some((c: any) => c.name === 'validatedAt')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "validatedAt" DATETIME`)
+    }
+    if (!saleCols.some((c: any) => c.name === 'paidAt')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "paidAt" DATETIME`)
+    }
+    if (!saleCols.some((c: any) => c.name === 'montantAvance')) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Sale" ADD COLUMN "montantAvance" REAL`)
+    }
+  } catch { /* ignorer */ }
+
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AppSettings" (
       "id" TEXT PRIMARY KEY, "companyName" TEXT NOT NULL DEFAULT 'Mon Entreprise',
@@ -320,82 +393,301 @@ function registerIpcHandlers(): void {
   const canalPlusSaleService = createCanalPlusSaleService(prisma)
   const globalStatsService = createGlobalStatsService(prisma)
   const serviceSaleService = createServiceSaleService(prisma)
+  const authService = createAuthService(prisma)
+
+
+  ipcMain.handle('auth:has-users', () => authService.hasUsers())
+  ipcMain.handle('auth:setup-owner', async (_e, data) => {
+    const hasUsers = await authService.hasUsers()
+    if (hasUsers) throw new Error('Un propriétaire existe déjà')
+    return authService.createUser({ ...data, role: 'PROPRIETAIRE' })
+  })
+  ipcMain.handle('auth:login', async (_e, email, password) => {
+    const user = await authService.verifyUser(email, password)
+    if (!user) throw new Error('Email ou mot de passe incorrect')
+    sessionService.setCurrentSession(user)
+    return user
+  })
+  ipcMain.handle('auth:logout', () => sessionService.clearSession())
+  ipcMain.handle('auth:session', () => sessionService.getCurrentSession())
+  ipcMain.handle('auth:get-users', () => authService.getAllUsers())
+  ipcMain.handle('auth:create-user', (_e, data) => authService.createUser(data))
+  ipcMain.handle('auth:update-user', (_e, id, data) => authService.updateUser(id, data))
+  ipcMain.handle('auth:delete-user', (_e, id) => authService.deleteUser(id))
+  ipcMain.handle('auth:change-password', (_e, id, oldP, newP) => authService.changePassword(id, oldP, newP))
+  ipcMain.handle('auth:assign-warehouses', (_e, userId, wIds) => authService.assignWarehouseAccess(userId, wIds))
+
+  // Agents (Users avec rôle AGENT)
+  ipcMain.handle('db:get-agents', async () => {
+    return prisma!.user.findMany({ where: { role: 'AGENT' }, orderBy: { nom: 'asc' } })
+  })
+  ipcMain.handle('db:create-agent', async (_e, data) => {
+    const { email, password, nom, prenom, phone, commissionRate, notes } = data as any
+    const passwordHash = await authService.hashPassword(password)
+    return prisma!.user.create({
+      data: {
+        email, passwordHash, nom, prenom,
+        role: 'AGENT',
+        phone: phone || null,
+        commissionRate: commissionRate || 0,
+        notes: notes || null,
+        active: true
+      }
+    })
+  })
+  ipcMain.handle('db:update-agent', async (_e, id: string, data) => {
+    const updateData: any = { ...data }
+    if (data.password) {
+      updateData.passwordHash = await authService.hashPassword(data.password)
+      delete updateData.password
+    }
+    return prisma!.user.update({ where: { id }, data: updateData })
+  })
+  ipcMain.handle('db:delete-agent', async (_e, id: string) => {
+    const salesCount = await prisma!.sale.count({ where: { agentId: id, status: { not: 'ANNULE' } } })
+    if (salesCount > 0) throw new Error('Impossible de supprimer : cet agent a des ventes actives')
+    return prisma!.user.delete({ where: { id } })
+  })
 
   ipcMain.handle('db:get-global-stats', () => globalStatsService.getStats())
 
   ipcMain.handle('db:get-products', () => productService.getAll())
   ipcMain.handle('db:get-product-by-barcode', (_e, b: string) => productService.getByBarcode(b))
   ipcMain.handle('db:create-product', (_e, d) => {
-    const data = { ...d }
-    delete data.supplierId
-    delete data.categoryId
-    return productService.create(data)
+    return productService.create(d)
   })
   ipcMain.handle('db:update-product', (_e, id: string, d) => productService.update(id, d))
   ipcMain.handle('db:delete-product', (_e, id: string) => productService.delete(id))
 
-  async function nextInvoiceNumber(prefix: string): Promise<string> {
-    const now = new Date()
-    const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    const pattern = `${prefix}-${yymm}-`
-    const last = await prisma!.sale.findFirst({
-      where: { invoiceNumber: { startsWith: pattern } },
-      orderBy: { invoiceNumber: 'desc' },
-      select: { invoiceNumber: true }
-    })
-    const lastNum = last ? parseInt(last.invoiceNumber.split('-').pop() ?? '0', 10) : 0
-    return `${pattern}${String(lastNum + 1).padStart(4, '0')}`
-  }
 
   ipcMain.handle('db:create-sale', async (_e, data) => {
-    const { items, ...saleData } = data
-    const invoiceNumber = await nextInvoiceNumber('FACT')
-    const sale = await prisma!.sale.create({
-      data: { ...saleData, invoiceNumber, items: { create: items } },
-      include: { items: true, client: true, warehouse: true }
-    })
-    // Créer automatiquement l'entrée dans le cahier de caisse
-    const transaction = await cashRegisterService.create({
-      type: 'ENTREE',
-      warehouseId: saleData.warehouseId,
-      totalAmount: saleData.finalTotal,
-      paymentMethod: saleData.paymentMethod || 'ESPECES',
-      description: `Vente — ${saleData.clientId ? 'client rattaché' : 'client anonyme'}`,
-      lines: (items as { productId: string; quantity: number; unitPrice: number }[]).map(
-        (item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          subTotal: item.quantity * item.unitPrice
+    const { items, status, agentId, montantAvance, ...saleData } = data
+    const saleStatus: string = status || 'EN_ATTENTE'
+
+    return prisma!.$transaction(async (tx) => {
+      // Générer le numéro de facture atomiquement
+      const now = new Date()
+      const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const pattern = `FACT-${yymm}-`
+      const last = await tx.sale.findFirst({
+        where: { invoiceNumber: { startsWith: pattern } },
+        orderBy: { invoiceNumber: 'desc' },
+        select: { invoiceNumber: true }
+      })
+      const lastNum = last ? parseInt(last.invoiceNumber.split('-').pop() ?? '0', 10) : 0
+      const invoiceNumber = `${pattern}${String(lastNum + 1).padStart(4, '0')}`
+
+      // Valider le stock pour chaque article
+      for (const item of items as { productId: string; quantity: number; unitPrice: number }[]) {
+        const stock = await tx.stock.findFirst({
+          where: { productId: item.productId, warehouseId: saleData.warehouseId },
+          include: { product: true }
         })
-      )
+        if (!stock || stock.quantity < item.quantity) {
+          const productName = stock?.product?.name ?? item.productId
+          throw new Error(`Stock insuffisant pour ${productName} : ${stock?.quantity ?? 0} disponible(s), ${item.quantity} demandé(s)`)
+        }
+      }
+
+      // Si c'est une vente directe (VALIDE/PAYE), comportement original
+      const isDirectSale = saleStatus === 'VALIDE' || saleStatus === 'PAYE'
+
+      // Créer la vente
+      const saleDataToCreate: any = { ...saleData, invoiceNumber, status: saleStatus }
+      if (agentId) saleDataToCreate.agentId = agentId
+      if (montantAvance != null) saleDataToCreate.montantAvance = montantAvance
+      if (saleStatus === 'PAYE') saleDataToCreate.paidAt = new Date()
+      if (saleStatus === 'VALIDE') {
+        saleDataToCreate.validatedAt = new Date()
+        // Calculer la commission agent si agent assigné
+        if (agentId) {
+          const agent = await tx.user.findUnique({ where: { id: agentId } })
+          if (agent && agent.commissionRate > 0) {
+            saleDataToCreate.commissionAmount = Math.round(saleData.finalTotal * (agent.commissionRate / 100) * 100) / 100
+          }
+        }
+      }
+
+      const sale = await tx.sale.create({
+        data: {
+          ...saleDataToCreate,
+          items: { create: items },
+          ...(saleStatus === 'PAYE' ? { paidAt: new Date() } : {})
+        },
+        include: { items: { include: { product: true } }, client: true, warehouse: true, agent: true }
+      })
+
+      // Créer l'entrée cahier de caisse
+      // Pour une avance, la transaction enregistre le montant réellement versé
+      const montantCaisse = (saleStatus === 'EN_ATTENTE' && montantAvance != null) ? montantAvance : saleData.finalTotal
+      await tx.cashTransaction.create({
+        data: {
+          type: 'ENTREE',
+          totalAmount: montantCaisse,
+          paymentMethod: saleData.paymentMethod || 'ESPECES',
+          description: `Vente — ${saleData.clientId ? 'client rattaché' : 'client anonyme'}${saleStatus !== 'EN_ATTENTE' ? '' : ' (avance)'}${montantAvance != null && montantAvance !== saleData.finalTotal ? ` — ${montantAvance} FCFA versés sur ${saleData.finalTotal} FCFA` : ''}`,
+          category: 'GENERAL',
+          warehouseId: saleData.warehouseId,
+          lines: {
+            create: (items as { productId: string; quantity: number; unitPrice: number }[]).map(
+              (item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                subTotal: item.quantity * item.unitPrice
+              })
+            )
+          }
+        }
+      })
+
+      if (isDirectSale) {
+        // Vente directe : stock déduit normalement
+        for (const item of items as { productId: string; quantity: number; unitPrice: number }[]) {
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: saleData.warehouseId },
+            data: { quantity: { decrement: item.quantity } }
+          })
+        }
+      } else {
+        // Avance : stock → réservé (espace virtuel)
+        for (const item of items as { productId: string; quantity: number; unitPrice: number }[]) {
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: saleData.warehouseId },
+            data: {
+              quantity: { decrement: item.quantity },
+              quantityReservee: { increment: item.quantity }
+            }
+          })
+        }
+      }
+
+      // Enregistrer la remise si applicable
+      if (saleData.discount > 0) {
+        await tx.discount.create({
+          data: {
+            saleId: sale.id,
+            warehouseId: saleData.warehouseId,
+            amount: saleData.discount,
+            reason: null
+          }
+        })
+        await tx.cashTransaction.create({
+          data: {
+            type: 'SORTIE',
+            totalAmount: saleData.discount,
+            paymentMethod: saleData.paymentMethod || 'ESPECES',
+            description: `Remise sur vente — N° ${invoiceNumber}`,
+            category: 'GENERAL',
+            warehouseId: saleData.warehouseId,
+            lines: { create: [] }
+          }
+        })
+      }
+
+      return sale
     })
-    ;(sale as any).cashTransactionId = transaction.id
-
-    // Si une remise a été appliquée, l'enregistrer et créer une sortie dans le cahier de caisse
-    if (saleData.discount > 0) {
-      await discountService.create({
-        saleId: sale.id,
-        warehouseId: saleData.warehouseId,
-        amount: saleData.discount,
-        reason: null
-      })
-      await cashRegisterService.create({
-        type: 'SORTIE',
-        warehouseId: saleData.warehouseId,
-        totalAmount: saleData.discount,
-        paymentMethod: saleData.paymentMethod || 'ESPECES',
-        description: `Remise sur vente — N° ${invoiceNumber}`,
-        lines: []
-      })
-    }
-
-    return sale
   })
 
   ipcMain.handle('db:get-sales', async (_e, clientId?: string) => {
     const where = clientId ? { clientId } : {}
-    return prisma!.sale.findMany({ where, include: { items: { include: { product: true } }, client: true, warehouse: true }, orderBy: { createdAt: 'desc' } })
+    return prisma!.sale.findMany({
+      where,
+      include: { items: { include: { product: true } }, client: true, warehouse: true, agent: true },
+      orderBy: { createdAt: 'desc' }
+    })
+  })
+
+  // Valider une facture (EN_ATTENTE → VALIDE)
+  ipcMain.handle('db:validate-sale', async (_e, saleId: string) => {
+    return prisma!.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        include: { items: true }
+      })
+      if (!sale) throw new Error('Facture introuvable')
+      if (sale.status !== 'EN_ATTENTE') throw new Error(`Impossible de valider : le statut actuel est "${sale.status}"`)
+      if (sale.status === 'PAYE') throw new Error('Impossible de valider : la facture est déjà payée')
+
+      // Libérer le stock réservé
+      for (const item of sale.items) {
+        await tx.stock.updateMany({
+          where: { productId: item.productId, warehouseId: sale.warehouseId },
+          data: { quantityReservee: { decrement: item.quantity } }
+        })
+      }
+      // Calculer commission agent si présent
+
+      let commissionAmount: number | null = null
+      if (sale.agentId) {
+        const agent = await tx.user.findUnique({ where: { id: sale.agentId } })
+        if (agent && agent.commissionRate > 0) {
+          commissionAmount = Math.round(sale.finalTotal * (agent.commissionRate / 100) * 100) / 100
+        }
+      }
+
+      return tx.sale.update({
+        where: { id: saleId },
+        data: { status: 'VALIDE', validatedAt: new Date(), commissionAmount },
+        include: { items: { include: { product: true } }, client: true, warehouse: true, agent: true }
+      })
+    })
+  })
+
+  // Payer une facture (VALIDE → PAYE)
+  ipcMain.handle('db:pay-sale', async (_e, saleId: string) => {
+    return prisma!.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({ where: { id: saleId } })
+      if (!sale) throw new Error('Facture introuvable')
+      if (sale.status !== 'VALIDE') throw new Error(`Impossible de payer : le statut actuel est "${sale.status}"`)
+
+      return tx.sale.update({
+        where: { id: saleId },
+        data: { status: 'PAYE', paidAt: new Date() },
+        include: { items: { include: { product: true } }, client: true, warehouse: true, agent: true }
+      })
+    })
+  })
+
+  // Annuler une facture (EN_ATTENTE → ANNULE)
+  ipcMain.handle('db:cancel-sale', async (_e, saleId: string) => {
+    return prisma!.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        include: { items: true }
+      })
+      if (!sale) throw new Error('Facture introuvable')
+      if (sale.status === 'PAYE') throw new Error('Impossible d\'annuler : la facture est déjà payée')
+      if (sale.status === 'ANNULE') throw new Error('La facture est déjà annulée')
+
+      // Restituer le stock
+      if (sale.status === 'EN_ATTENTE') {
+        // Restituer depuis le stock réservé
+        for (const item of sale.items) {
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: sale.warehouseId },
+            data: {
+              quantity: { increment: item.quantity },
+              quantityReservee: { decrement: item.quantity }
+            }
+          })
+        }
+      } else if (sale.status === 'VALIDE') {
+        // Restituer depuis le stock normal (déjà déduit)
+        for (const item of sale.items) {
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: sale.warehouseId },
+            data: { quantity: { increment: item.quantity } }
+          })
+        }
+      }
+
+      return tx.sale.update({
+        where: { id: saleId },
+        data: { status: 'ANNULE' },
+        include: { items: { include: { product: true } }, client: true, warehouse: true, agent: true }
+      })
+    })
   })
 
   ipcMain.handle('db:get-warehouses', () => warehouseService.getAll())
@@ -445,6 +737,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('print:export-report', (_e, data) => reportService.exportStockReport(data))
 
   ipcMain.handle('db:get-clients', () => clientService.getAllWithStats())
+  ipcMain.handle('db:search-clients', (_e, query: string) => clientService.search(query))
   ipcMain.handle('db:get-client', (_e, id: string) => clientService.getByIdWithSales(id))
   ipcMain.handle('db:create-client', (_e, d) => clientService.create(d))
   ipcMain.handle('db:update-client', (_e, id: string, d) => clientService.update(id, d))
@@ -522,27 +815,30 @@ function registerIpcHandlers(): void {
       }))
     })
     // Pour les articles envoyés au magasin : corriger le stock boutique → magasin
-    for (const item of items) {
-      if (item.sendToMagasin) {
-        const stock = await prisma.stock.findFirst({
-          where: { productId: item.productId, warehouseId }
-        })
-        if (stock) {
-          await prisma.stock.update({
-            where: { id: stock.id },
-            data: {
-              quantity: { decrement: item.quantity },
-              quantityMagasin: { increment: item.quantity }
-            }
+    const sendToMagasinItems = items.filter(i => i.sendToMagasin)
+    if (sendToMagasinItems.length > 0) {
+      await prisma!.$transaction(async (tx) => {
+        for (const item of sendToMagasinItems) {
+          const stock = await tx.stock.findFirst({
+            where: { productId: item.productId, warehouseId }
           })
-          await prisma.magasinTransaction.create({
-            data: {
-              productId: item.productId, warehouseId,
-              type: 'ENTREE', quantity: item.quantity
-            }
-          })
+          if (stock) {
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: {
+                quantity: { decrement: item.quantity },
+                quantityMagasin: { increment: item.quantity }
+              }
+            })
+            await tx.magasinTransaction.create({
+              data: {
+                productId: item.productId, warehouseId,
+                type: 'ENTREE', quantity: item.quantity
+              }
+            })
+          }
         }
-      }
+      })
     }
     return transaction
   })
@@ -560,19 +856,19 @@ function registerIpcHandlers(): void {
   ipcMain.handle('magasin:transfer-to-boutique', async (_e, data: {
     productId: string; warehouseId: string; quantity: number
   }) => {
-    const stock = await prisma.stock.findFirst({
-      where: { productId: data.productId, warehouseId: data.warehouseId }
-    })
-    if (!stock || stock.quantityMagasin < data.quantity) throw new Error('Stock magasin insuffisant')
-    const [updated] = await prisma.$transaction([
-      prisma.stock.update({
+    await prisma!.$transaction(async (tx) => {
+      const stock = await tx.stock.findFirst({
+        where: { productId: data.productId, warehouseId: data.warehouseId }
+      })
+      if (!stock || stock.quantityMagasin < data.quantity) throw new Error('Stock magasin insuffisant')
+      await tx.stock.update({
         where: { id: stock.id },
         data: {
           quantityMagasin: { decrement: data.quantity },
           quantity: { increment: data.quantity }
         }
-      }),
-      prisma.magasinTransaction.create({
+      })
+      await tx.magasinTransaction.create({
         data: {
           productId: data.productId,
           warehouseId: data.warehouseId,
@@ -580,43 +876,45 @@ function registerIpcHandlers(): void {
           quantity: data.quantity
         }
       })
-    ])
+    })
     return productService.getById(data.productId)
   })
 
   ipcMain.handle('magasin:send-to-magasin', async (_e, data: {
     productId: string; warehouseId: string; quantity: number
   }) => {
-    const stock = await prisma.stock.findFirst({
-      where: { productId: data.productId, warehouseId: data.warehouseId }
-    })
-    if (!stock) {
-      await prisma.stock.create({
+    await prisma!.$transaction(async (tx) => {
+      const stock = await tx.stock.findFirst({
+        where: { productId: data.productId, warehouseId: data.warehouseId }
+      })
+      if (!stock) {
+        await tx.stock.create({
+          data: {
+            productId: data.productId,
+            warehouseId: data.warehouseId,
+            quantity: 0,
+            quantityMagasin: data.quantity,
+            alertLimit: 5
+          }
+        })
+      } else {
+        if (stock.quantity < data.quantity) throw new Error('Stock boutique insuffisant')
+        await tx.stock.update({
+          where: { id: stock.id },
+          data: {
+            quantity: { decrement: data.quantity },
+            quantityMagasin: { increment: data.quantity }
+          }
+        })
+      }
+      await tx.magasinTransaction.create({
         data: {
           productId: data.productId,
           warehouseId: data.warehouseId,
-          quantity: 0,
-          quantityMagasin: data.quantity,
-          alertLimit: 5
+          type: 'ENTREE',
+          quantity: data.quantity
         }
       })
-    } else {
-      if (stock.quantity < data.quantity) throw new Error('Stock boutique insuffisant')
-      await prisma.stock.update({
-        where: { id: stock.id },
-        data: {
-          quantity: { decrement: data.quantity },
-          quantityMagasin: { increment: data.quantity }
-        }
-      })
-    }
-    await prisma.magasinTransaction.create({
-      data: {
-        productId: data.productId,
-        warehouseId: data.warehouseId,
-        type: 'ENTREE',
-        quantity: data.quantity
-      }
     })
     return productService.getById(data.productId)
   })
@@ -624,53 +922,54 @@ function registerIpcHandlers(): void {
   ipcMain.handle('magasin:receive-purchase', async (_e, data: {
     productId: string; warehouseId: string; quantity: number; unitPrice: number; paymentMethod?: string
   }) => {
-    // Comptabilité : enregistre la sortie de caisse pour l'achat
-    await cashRegisterService.create({
-      type: 'SORTIE',
-      warehouseId: data.warehouseId,
-      totalAmount: data.unitPrice * data.quantity,
-      paymentMethod: data.paymentMethod || 'ESPECES',
-      description: `Achat → Magasin (${data.quantity} unité${data.quantity > 1 ? 's' : ''})`,
-      lines: [{
-        productId: data.productId,
-        quantity: data.quantity,
-        unitPrice: data.unitPrice,
-        subTotal: data.unitPrice * data.quantity
-      }]
-    })
-    // Le stock boutique n'est pas impacté (cashRegisterService incremente quantity, on corrige)
-    const stock = await prisma.stock.findFirst({
-      where: { productId: data.productId, warehouseId: data.warehouseId }
-    })
-    if (stock) {
-      // Annuler l'incrément sur quantity fait par cashRegisterService,
-      // et ajouter à quantityMagasin à la place
-      await prisma.stock.update({
-        where: { id: stock.id },
+    await prisma!.$transaction(async (tx) => {
+      // Comptabilité : enregistre la sortie de caisse pour l'achat
+      await tx.cashTransaction.create({
         data: {
-          quantity: { decrement: data.quantity },
-          quantityMagasin: { increment: data.quantity }
+          type: 'SORTIE',
+          totalAmount: data.unitPrice * data.quantity,
+          paymentMethod: data.paymentMethod || 'ESPECES',
+          description: `Achat → Magasin (${data.quantity} unité${data.quantity > 1 ? 's' : ''})`,
+          category: 'GENERAL',
+          warehouseId: data.warehouseId,
+          lines: {
+            create: [{
+              productId: data.productId,
+              quantity: data.quantity,
+              unitPrice: data.unitPrice,
+              subTotal: data.unitPrice * data.quantity
+            }]
+          }
         }
       })
-    } else {
-      // cashRegisterService a déjà créé un stock avec quantity, on le convertit
-      const newStock = await prisma.stock.findFirst({
+      // Mettre à jour le stock : directement dans magasin
+      const stock = await tx.stock.findFirst({
         where: { productId: data.productId, warehouseId: data.warehouseId }
       })
-      if (newStock) {
-        await prisma.stock.update({
-          where: { id: newStock.id },
-          data: { quantity: 0, quantityMagasin: data.quantity }
+      if (stock) {
+        await tx.stock.update({
+          where: { id: stock.id },
+          data: { quantityMagasin: { increment: data.quantity } }
+        })
+      } else {
+        await tx.stock.create({
+          data: {
+            productId: data.productId,
+            warehouseId: data.warehouseId,
+            quantity: 0,
+            quantityMagasin: data.quantity,
+            alertLimit: 5
+          }
         })
       }
-    }
-    await prisma.magasinTransaction.create({
-      data: {
-        productId: data.productId,
-        warehouseId: data.warehouseId,
-        type: 'ENTREE',
-        quantity: data.quantity
-      }
+      await tx.magasinTransaction.create({
+        data: {
+          productId: data.productId,
+          warehouseId: data.warehouseId,
+          type: 'ENTREE',
+          quantity: data.quantity
+        }
+      })
     })
     return productService.getById(data.productId)
   })
@@ -805,6 +1104,9 @@ function registerIpcHandlers(): void {
 
   // Export PDF générique (tableau HTML → PDF)
   ipcMain.handle('export:table-pdf', async (_e, html: string, filename: string) => {
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      throw new Error('Nom de fichier invalide')
+    }
     const pdfWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
     await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
     const pdfBuf = await pdfWindow.webContents.printToPDF({ printBackground: true, landscape: true })
@@ -818,6 +1120,15 @@ function registerIpcHandlers(): void {
 
   // Ouvrir un fichier dans le navigateur par défaut
   ipcMain.handle('shell:open-file', async (_e, filePath: string) => {
+    const allowedDirs = [
+      app.getPath('desktop'),
+      app.getPath('documents'),
+      app.getPath('downloads'),
+      app.getPath('userData')
+    ]
+    const resolved = resolve(filePath)
+    const isAllowed = allowedDirs.some(dir => resolved.startsWith(resolve(dir)))
+    if (!isAllowed) throw new Error('Accès refusé : chemin non autorisé')
     await shell.openPath(filePath)
   })
 }
@@ -904,6 +1215,18 @@ env.GTK_MODULES = ''
 app.whenReady().then(async () => {
   protocol.handle('local-file', (request) => {
     const filePath = decodeURIComponent(request.url.slice('local-file://'.length))
+    const allowedDirs = [
+      app.getPath('userData'),
+      app.getPath('documents'),
+      app.getPath('desktop'),
+      join(app.getAppPath(), 'out'),
+      join(app.getAppPath(), 'resources')
+    ]
+    const resolved = resolve(filePath)
+    const isAllowed = allowedDirs.some(dir => resolved.startsWith(resolve(dir)))
+    if (!isAllowed) {
+      return new Response('Accès refusé', { status: 403 })
+    }
     return net.fetch('file://' + filePath)
   })
 

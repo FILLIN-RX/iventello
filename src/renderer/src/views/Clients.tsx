@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Search, Mail, Phone, TrendingUp, Star } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useProducts } from '../hooks/useProducts'
@@ -25,7 +25,7 @@ function Clients() {
     try { setLoading(true); setClients(await window.api.getClients() as ClientStats[]) }
     catch { /* ignore */ } finally { setLoading(false) }
   }
-  useState(() => { load() })
+  useEffect(() => { load() }, [])
 
   const filtered = clients.filter((c) =>
     c.client.name.toLowerCase().includes(search.toLowerCase()) ||

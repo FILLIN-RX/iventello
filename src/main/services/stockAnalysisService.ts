@@ -71,7 +71,7 @@ export function createStockAnalysisService(prisma: PrismaClient) {
         }
       })
 
-      const toReorder = stocks.filter((s) => s.quantity <= s.alertLimit)
+      const toReorder = stocks.filter((s) => (s.quantity + s.quantityMagasin) <= s.alertLimit)
 
       const orders: PurchaseOrderItem[] = toReorder
         .filter((s) => s.product.supplier)

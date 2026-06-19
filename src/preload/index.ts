@@ -1,6 +1,19 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
+  auth: {
+    hasUsers: () => ipcRenderer.invoke('auth:has-users'),
+    setupOwner: (data: unknown) => ipcRenderer.invoke('auth:setup-owner', data),
+    login: (email: string, password: string) => ipcRenderer.invoke('auth:login', email, password),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    session: () => ipcRenderer.invoke('auth:session'),
+    getUsers: () => ipcRenderer.invoke('auth:get-users'),
+    createUser: (data: unknown) => ipcRenderer.invoke('auth:create-user', data),
+    updateUser: (id: string, data: unknown) => ipcRenderer.invoke('auth:update-user', id, data),
+    deleteUser: (id: string) => ipcRenderer.invoke('auth:delete-user', id),
+    changePassword: (id: string, oldP: string, newP: string) => ipcRenderer.invoke('auth:change-password', id, oldP, newP),
+    assignWarehouses: (userId: string, wIds: string[]) => ipcRenderer.invoke('auth:assign-warehouses', userId, wIds),
+  },
   getProducts: () => ipcRenderer.invoke('db:get-products'),
   getProductByBarcode: (barcode: string) => ipcRenderer.invoke('db:get-product-by-barcode', barcode),
   createProduct: (data: unknown) => ipcRenderer.invoke('db:create-product', data),
@@ -21,6 +34,7 @@ const api = {
   printReceipt: (data: unknown) => ipcRenderer.invoke('print:receipt', data),
   exportStockReport: (data: unknown) => ipcRenderer.invoke('print:export-report', data),
   getClients: () => ipcRenderer.invoke('db:get-clients'),
+  searchClients: (query: string) => ipcRenderer.invoke('db:search-clients', query),
   getClient: (id: string) => ipcRenderer.invoke('db:get-client', id),
   createClient: (data: unknown) => ipcRenderer.invoke('db:create-client', data),
   updateClient: (id: string, data: unknown) => ipcRenderer.invoke('db:update-client', id, data),
@@ -69,6 +83,15 @@ const api = {
   createServiceSale: (data: unknown) => ipcRenderer.invoke('db:create-service-sale', data),
   getGlobalStats: () => ipcRenderer.invoke('db:get-global-stats'),
   getDiscounts: (warehouseId?: string) => ipcRenderer.invoke('db:get-discounts', warehouseId),
+  // Agents
+  getAgents: () => ipcRenderer.invoke('db:get-agents'),
+  createAgent: (data: unknown) => ipcRenderer.invoke('db:create-agent', data),
+  updateAgent: (id: string, data: unknown) => ipcRenderer.invoke('db:update-agent', id, data),
+  deleteAgent: (id: string) => ipcRenderer.invoke('db:delete-agent', id),
+  // Actions sur les factures
+  validateSale: (saleId: string) => ipcRenderer.invoke('db:validate-sale', saleId),
+  paySale: (saleId: string) => ipcRenderer.invoke('db:pay-sale', saleId),
+  cancelSale: (saleId: string) => ipcRenderer.invoke('db:cancel-sale', saleId),
   getAppSettings: () => ipcRenderer.invoke('db:get-app-settings'),
   updateAppSettings: (data: unknown) => ipcRenderer.invoke('db:update-app-settings', data),
   getMonthlyReport: (warehouseId: string, year: number, month: number) => ipcRenderer.invoke('db:get-monthly-report', warehouseId, year, month),

@@ -2,6 +2,31 @@ import { PrismaClient } from '@prisma/client'
 
 export function createClientService(prisma: PrismaClient) {
   return {
+    async search(query: string) {
+      if (!query || query.length < 2) return []
+      const clients = await prisma.client.findMany({
+        where: {
+          OR: [
+            { name: { contains: query } },
+            { email: { contains: query } },
+            { phone: { contains: query } }
+          ]
+        },
+        include: { sales: { select: { finalTotal: true, createdAt: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      })
+      return clients.map(c => ({
+        client: c,
+        totalSpent: c.sales.reduce((s, sale) => s + sale.finalTotal, 0),
+        purchaseCount: c.sales.length,
+        lastPurchase: c.sales.length > 0
+          ? c.sales.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
+          : null,
+        rank: 'standard' as const
+      }))
+    },
+
     async getAllWithStats() {
       const clients = await prisma.client.findMany({
         include: { sales: { include: { warehouse: true, items: true } } },

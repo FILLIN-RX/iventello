@@ -1,3 +1,22 @@
+export type Role = 'PROPRIETAIRE' | 'MANAGER' | 'CAISSIER' | 'EMPLOYE' | 'AGENT'
+
+export type SaleStatus = 'EN_ATTENTE' | 'VALIDE' | 'PAYE' | 'ANNULE'
+
+export interface User {
+  id: string
+  email: string
+  nom: string
+  prenom: string
+  role: Role
+  avatarUrl: string | null
+  phone: string | null
+  commissionRate: number
+  notes: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Product {
   id: string
   barcode: string
@@ -41,6 +60,7 @@ export interface StockInfo {
   id: string
   quantity: number
   quantityMagasin: number
+  quantityReservee: number
   alertLimit: number
   shelfLocation: string | null
   warehouse: Warehouse
@@ -100,7 +120,13 @@ export interface Sale {
   vatTotal: number
   discount: number
   finalTotal: number
+  montantAvance: number | null
   paymentMethod: string
+  status: SaleStatus
+  agentId: string | null
+  commissionAmount: number | null
+  validatedAt: string | null
+  paidAt: string | null
   createdAt: string
 }
 
@@ -108,6 +134,7 @@ export interface SaleWithClient extends Sale {
   client: Client | null
   items: SaleItem[]
   warehouse: Warehouse
+  agent: User | null
 }
 
 export interface SaleItem {
@@ -210,6 +237,20 @@ export interface CashReportData {
 }
 
 export interface ElectronApi {
+  // Auth
+  auth: {
+    hasUsers: () => Promise<boolean>
+    setupOwner: (data: any) => Promise<User>
+    login: (email: string, password: string) => Promise<User>
+    logout: () => Promise<void>
+    session: () => Promise<User | null>
+    getUsers: () => Promise<User[]>
+    createUser: (data: any) => Promise<User>
+    updateUser: (id: string, data: any) => Promise<User>
+    deleteUser: (id: string) => Promise<void>
+    changePassword: (id: string, oldP: string, newP: string) => Promise<void>
+    assignWarehouses: (userId: string, warehouseIds: string[]) => Promise<void>
+  }
   getProducts: () => Promise<ProductWithRelations[]>
   getProductByBarcode: (barcode: string) => Promise<ProductWithRelations | null>
   createProduct: (data: Partial<Product>) => Promise<Product>
@@ -223,8 +264,11 @@ export interface ElectronApi {
     discount?: number
     finalTotal: number
     paymentMethod: string
+    status?: SaleStatus
+    agentId?: string | null
+    montantAvance?: number
     items: { productId: string; quantity: number; unitPrice: number }[]
-  }) => Promise<Sale>
+  }) => Promise<SaleWithClient>
   getSales: (clientId?: string) => Promise<SaleWithClient[]>
   getWarehouses: () => Promise<Warehouse[]>
   createWarehouse: (data: { name: string; location?: string; logoUrl?: string; mobileMoneyEnabled?: boolean }) => Promise<Warehouse>
@@ -253,6 +297,7 @@ export interface ElectronApi {
   printReceipt: (data: ReceiptData) => Promise<void>
   exportStockReport: (data: { products: unknown[]; alerts: unknown[]; totalProducts: number; totalValue: number; alertCount: number; date: string }) => Promise<string>
   getClients: () => Promise<ClientStats[]>
+  searchClients: (query: string) => Promise<ClientStats[]>
   getClient: (id: string) => Promise<ClientStats & { sales: SaleWithClient[] }>
   createClient: (data: { name: string; email?: string; phone?: string; address?: string; notes?: string }) => Promise<Client>
   updateClient: (id: string, data: Partial<{ name: string; email: string; phone: string; address: string; notes: string }>) => Promise<Client>
@@ -352,6 +397,15 @@ export interface ElectronApi {
   sendToMagasin: (data: { productId: string; warehouseId: string; quantity: number }) => Promise<any>
   receivePurchaseToMagasin: (data: { productId: string; warehouseId: string; quantity: number; unitPrice: number; paymentMethod?: string }) => Promise<any>
   openFile: (filePath: string) => Promise<void>
+  // Agents
+  getAgents: () => Promise<User[]> // Users avec rôle AGENT
+  createAgent: (data: { email: string; password: string; nom: string; prenom: string; phone?: string; commissionRate?: number; notes?: string }) => Promise<User>
+  updateAgent: (id: string, data: Partial<{ nom: string; prenom: string; email: string; password: string; phone: string; commissionRate: number; notes: string; active: boolean }>) => Promise<User>
+  deleteAgent: (id: string) => Promise<void>
+  // Actions sur les factures
+  validateSale: (saleId: string) => Promise<SaleWithClient>
+  paySale: (saleId: string) => Promise<SaleWithClient>
+  cancelSale: (saleId: string) => Promise<SaleWithClient>
   // Updates
   checkForUpdates: () => void
   installUpdate: () => void

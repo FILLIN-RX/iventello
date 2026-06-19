@@ -19,8 +19,13 @@ export function createWarehouseService(prisma: PrismaClient) {
     },
 
     async delete(id: string) {
-      await prisma.stock.deleteMany({ where: { warehouseId: id } })
+      await prisma.discount.deleteMany({ where: { warehouseId: id } })
+      await prisma.magasinTransaction.deleteMany({ where: { warehouseId: id } })
+      await prisma.canalPlusSale.deleteMany({ where: { warehouseId: id } })
+      await prisma.serviceSale.deleteMany({ where: { warehouseId: id } })
+      await prisma.cashTransaction.deleteMany({ where: { warehouseId: id } })
       await prisma.sale.deleteMany({ where: { warehouseId: id } })
+      await prisma.stock.deleteMany({ where: { warehouseId: id } })
       await prisma.warehouse.delete({ where: { id } })
     }
   }

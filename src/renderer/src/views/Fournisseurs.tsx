@@ -19,7 +19,7 @@ function Fournisseurs() {
     try { setLoading(true); setSuppliers(await window.api.getSuppliers() as Supplier[]) }
     catch { /* ignore */ } finally { setLoading(false) }
   }
-  useState(() => { load() })
+  useEffect(() => { load() }, [])
 
   function openCreate() { setEditing(null); setForm({ name: '', email: '', phone: '', address: '' }); setShowForm(true) }
   function openEdit(s: Supplier) { setEditing(s); setForm({ name: s.name, email: s.email ?? '', phone: s.phone ?? '', address: s.address ?? '' }); setShowForm(true) }

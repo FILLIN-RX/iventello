@@ -8,8 +8,22 @@ export function createProductService(prisma: PrismaClient) {
   }
 
   return {
-    async getAll() {
-      return prisma.product.findMany({ include, orderBy: { createdAt: 'desc' } })
+    async getAll(page?: number, pageSize?: number, search?: string) {
+      const where = search ? { name: { contains: search } } : {}
+      if (page && pageSize) {
+        const [products, total] = await Promise.all([
+          prisma.product.findMany({
+            where,
+            include,
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * pageSize,
+            take: pageSize
+          }),
+          prisma.product.count({ where })
+        ])
+        return { products, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+      }
+      return prisma.product.findMany({ where, include, orderBy: { createdAt: 'desc' } })
     },
 
     async getByBarcode(barcode: string) {
@@ -67,19 +81,12 @@ export function createProductService(prisma: PrismaClient) {
 
     async getStockAlerts() {
       const stocks = await prisma.stock.findMany({
+        where: { alertLimit: { gt: 0 } },
         include: { product: { include: { supplier: true } }, warehouse: true }
       })
-      const alerts: {
-        product: any
-        stock: any
-        warehouse: any
-      }[] = []
-      for (const s of stocks) {
-        if (s.quantity <= s.alertLimit) {
-          alerts.push({ product: s.product, stock: s, warehouse: s.warehouse })
-        }
-      }
-      return alerts
+      return stocks
+        .filter(s => s.quantity <= s.alertLimit)
+        .map(s => ({ product: s.product, stock: s, warehouse: s.warehouse }))
     }
   }
 }

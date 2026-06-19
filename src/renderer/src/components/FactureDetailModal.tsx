@@ -1,4 +1,4 @@
-import { Printer, User, Building2, CreditCard, Hash } from 'lucide-react'
+import { Printer, User, Building2, CreditCard, Hash, UserCheck } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   Dialog,
@@ -117,7 +117,37 @@ export function FactureDetailModal({ open, onClose, sale }: Props) {
             <Hash className="h-3.5 w-3.5 text-muted-foreground" />
             <span>{items.length} article{items.length > 1 ? 's' : ''}</span>
           </div>
+          {sale.status && (
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                sale.status === 'EN_ATTENTE' ? 'bg-amber-100 text-amber-700' :
+                sale.status === 'VALIDE' ? 'bg-blue-100 text-blue-700' :
+                sale.status === 'PAYE' ? 'bg-emerald-100 text-emerald-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {sale.status === 'EN_ATTENTE' ? 'En attente' :
+                 sale.status === 'VALIDE' ? 'Validée' :
+                 sale.status === 'PAYE' ? 'Payée' : 'Annulée'}
+              </span>
+            </div>
+          )}
         </div>
+        {(sale as any).agent && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs">Agent : {(sale as any).agent.name}</span>
+          </div>
+        )}
+        {(sale as any).montantAvance != null && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-xs text-amber-600">
+              Avance versée : {formatCurrency((sale as any).montantAvance)}
+              {(sale as any).montantAvance < sale.finalTotal && (
+                <span className="text-muted-foreground"> (reste : {formatCurrency(sale.finalTotal - (sale as any).montantAvance)})</span>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Articles */}
         <table className="w-full text-sm">
