@@ -69,6 +69,10 @@ function Caisse() {
     window.api.getAgents().then((a: any) => setAgents(a)).catch(() => {})
   }, [])
 
+  const subTotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
+  const vatTotal = applyVat ? items.reduce((s, i) => s + i.price * i.quantity * (i.vatRate / 100), 0) : 0
+  const finalTotal = subTotal + vatTotal - discount
+
   useEffect(() => {
     setMontantAvance(finalTotal)
   }, [isAvance, finalTotal])
@@ -97,10 +101,6 @@ function Caisse() {
     if (qty <= 0) { setItems((prev) => prev.filter((i) => i.productId !== productId)); return }
     setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity: qty } : i))
   }
-
-  const subTotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
-  const vatTotal = applyVat ? items.reduce((s, i) => s + i.price * i.quantity * (i.vatRate / 100), 0) : 0
-  const finalTotal = subTotal + vatTotal - discount
 
   async function searchClient(q: string) {
     setClientSearch(q)

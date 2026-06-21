@@ -43,18 +43,17 @@ async function initDatabase(): Promise<void> {
     const platform = process.platform
     let engineName = ''
     if (platform === 'win32') engineName = 'query_engine-windows.dll.node'
-    else if (platform === 'darwin') engineName = 'query_engine-darwin.dylib.node'
-    else engineName = 'query_engine-debian-openssl-3.0.x.so.node' // ou linux-musl selon l'env
+    else if (platform === 'darwin') {
+      engineName = process.arch === 'arm64'
+        ? 'query_engine-darwin-arm64.dylib.node'
+        : 'query_engine-darwin.dylib.node'
+    } else {
+      // Linux — essayer de détecter OpenSSL
+      engineName = 'query_engine-linux-openssl-3.0.x.so.node'
+    }
 
-    // Le chemin vers l'engine déballé par electron-builder (asarUnpack)
-    const enginePath = join(
-      process.resourcesPath,
-      'app.asar.unpacked',
-      'node_modules',
-      '@prisma',
-      'engines',
-      engineName
-    )
+    // Chemin via extraResources (copié dans resources/prisma-engine/)
+    const enginePath = join(process.resourcesPath, 'prisma-engine', engineName)
     process.env.PRISMA_QUERY_ENGINE_LIBRARY = enginePath
   }
 

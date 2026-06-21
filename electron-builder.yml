@@ -13,6 +13,7 @@ files:
   - '!src/*'
   - '!electron.vite.config.*'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - 'node_modules/.prisma/client/**'
 
 asar: true
 asarUnpack:
@@ -20,15 +21,12 @@ asarUnpack:
   - "**/*.dll"
   - "**/*.so"
   - "**/*.dylib"
+  - "node_modules/@prisma/client/**"
+  - "node_modules/.prisma/client/**"
 
 extraResources:
   - from: "node_modules/@prisma/engines/"
     to: "prisma-engine/"
-    filter:
-      - "**/*.node"
-      - "**/*.so"
-      - "**/*.dll"
-      - "**/*.dylib"
 
 win:
   icon: src/assets/iventello.png
