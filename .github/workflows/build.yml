@@ -29,25 +29,11 @@ jobs:
       - name: Build Electron app
         run: npx --yes electron-vite build
 
-      - name: Debug build output
-        shell: pwsh
-        run: |
-          Write-Host "=== out/ ==="
-          Get-ChildItem -LiteralPath out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
-          Write-Host "=== node_modules/.bin/electron-builder ==="
-          Test-Path "node_modules/.bin/electron-builder"
-
       - name: Package with electron-builder
         shell: pwsh
         run: |
-          npx --yes electron-builder --win --publish never 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\ebuild.log"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "=== electron-builder ERROR LOG ==="
-            Get-Content "$env:RUNNER_TEMP\ebuild.log"
-            exit $LASTEXITCODE
-          }
-        env:
-          DEBUG: electron-builder
+          npx --yes electron-builder --win --publish never 2>&1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build logs
         if: failure()
@@ -56,10 +42,22 @@ jobs:
           name: build-logs
           path: ${{ runner.temp }}\ebuild.log
 
+      - name: Check sizes
+        shell: pwsh
+        run: |
+          $asar = Get-ChildItem "dist/win-unpacked/resources/app.asar"
+          $exe = Get-ChildItem "dist/win-unpacked/*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem "dist/*Setup*.exe" | Select-Object -First 1
+          $portable = Get-ChildItem "dist/*.exe" | Where-Object { $_.Name -notmatch "Setup|blockmap" } | Select-Object -First 1
+          Write-Host "app.asar: $([math]::Round($asar.Length/1MB,1)) MB"
+          if ($setup) { Write-Host "Setup.exe: $([math]::Round($setup.Length/1MB,1)) MB" }
+          if ($portable) { Write-Host "Portable.exe: $([math]::Round($portable.Length/1MB,1)) MB" }
+          $total = (Get-ChildItem "dist" -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host "Total dist/: $([math]::Round($total/1MB,1)) MB"
+
       - name: Upload artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: build-windows
           path: dist/
-          compression-level: 0

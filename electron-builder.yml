@@ -25,6 +25,11 @@ asarUnpack:
 extraResources:
   - from: "node_modules/@prisma/engines/"
     to: "prisma-engine/"
+    filter:
+      - "query_engine-windows.dll.node"
+
+npmRebuild: false
+nodeGypRebuild: false
 
 win:
   icon: src/assets/iventello.png
