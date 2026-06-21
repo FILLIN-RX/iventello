@@ -21,18 +21,44 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate Prisma client
         run: npm run prisma:generate
 
       - name: Build Electron app
-        run: npx electron-vite build
+        run: npx --yes electron-vite build
+
+      - name: Debug build output
+        shell: pwsh
+        run: |
+          Write-Host "=== out/ ==="
+          Get-ChildItem -LiteralPath out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
+          Write-Host "=== node_modules/.bin/electron-builder ==="
+          Test-Path "node_modules/.bin/electron-builder"
 
       - name: Package with electron-builder
-        run: npx electron-builder --win --publish never
+        shell: pwsh
+        run: |
+          npx --yes electron-builder --win --publish never 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\ebuild.log"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "=== electron-builder ERROR LOG ==="
+            Get-Content "$env:RUNNER_TEMP\ebuild.log"
+            exit $LASTEXITCODE
+          }
+        env:
+          DEBUG: electron-builder
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: ${{ runner.temp }}\ebuild.log
+
+      - name: Upload artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
         with:
           name: build-windows
           path: dist/
