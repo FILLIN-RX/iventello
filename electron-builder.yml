@@ -9,11 +9,11 @@ directories:
   output: dist
 
 files:
+  - 'out/**/*'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.*'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - 'node_modules/.prisma/client/**'
 
 asar: true
 asarUnpack:
@@ -21,8 +21,6 @@ asarUnpack:
   - "**/*.dll"
   - "**/*.so"
   - "**/*.dylib"
-  - "node_modules/@prisma/client/**"
-  - "node_modules/.prisma/client/**"
 
 extraResources:
   - from: "node_modules/@prisma/engines/"
