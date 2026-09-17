@@ -1,15 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS } from '../lib/queryClient'
 import type { StockAlert } from '../../../shared/types'
 
 export function useStockAlerts() {
-  const [alerts, setAlerts] = useState<StockAlert[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const fetch = useCallback(async () => {
-    try { setLoading(true); setError(null); setAlerts(await window.api.getStockAlerts() as StockAlert[]) }
-    catch (err) { setError(err instanceof Error ? err.message : 'Erreur') }
-    finally { setLoading(false) }
-  }, [])
-  useEffect(() => { fetch() }, [fetch])
-  return { alerts, loading, error, refetch: fetch }
+  const { data: alerts = [], isLoading: loading, error, refetch } = useQuery<StockAlert[]>({
+    queryKey: QUERY_KEYS.stockAlerts,
+    queryFn: async () => {
+      const res = await window.api.getStockAlerts()
+      return (res || []) as StockAlert[]
+    }
+  })
+
+  return {
+    alerts,
+    loading,
+    error: error instanceof Error ? error.message : null,
+    refetch
+  }
 }

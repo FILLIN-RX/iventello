@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { useEntrepotStore } from '../stores/entrepotStore'
+import { feedback } from '../stores/feedbackStore'
 import { formatCurrency } from '@/lib/utils'
 
 const CATEGORIES_DEPENSES = [
@@ -52,18 +53,33 @@ export default function Depenses() {
         warehouseId: workspaceId ?? undefined,
         paymentMethod: 'ESPECES'
       })
+      feedback.toast.success(`Dépense "${form.title.trim()}" enregistrée`)
       setShowForm(false)
       setForm({ title: '', amount: '', category: '', description: '' })
       refetch()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+    } catch (err: any) {
+      setError(err?.message || 'Erreur')
+      feedback.toast.error(err?.message || 'Erreur lors de l\'enregistrement de la dépense')
     } finally { setSaving(false) }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer cette dépense ?')) return
-    await window.api.deleteExpense(id)
-    refetch()
+  function handleDelete(id: string, title: string) {
+    feedback.confirm({
+      title: 'Supprimer cette dépense ?',
+      message: 'Cette action retirera la dépense du suivi comptable.',
+      itemName: title,
+      confirmLabel: 'Supprimer la dépense',
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          await window.api.deleteExpense(id)
+          feedback.toast.success(`Dépense "${title}" supprimée`)
+          refetch()
+        } catch (err: any) {
+          feedback.toast.error(err?.message || 'Erreur lors de la suppression')
+        }
+      }
+    })
   }
 
   return (
@@ -130,7 +146,7 @@ export default function Depenses() {
                   <p className="font-bold text-rose-600 text-sm whitespace-nowrap">
                     -{formatCurrency(exp.amount)}
                   </p>
-                  <button onClick={() => handleDelete(exp.id)}
+                  <button onClick={() => handleDelete(exp.id, exp.title)}
                     className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

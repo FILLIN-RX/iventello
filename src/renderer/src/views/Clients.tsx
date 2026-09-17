@@ -9,9 +9,12 @@ import { Badge } from '../components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import ClientDetail from './ClientDetail'
+import { feedback } from '../stores/feedbackStore'
+import { useEntrepotStore } from '../stores/entrepotStore'
 import type { ClientStats, Client } from '../../../shared/types'
 
 function Clients() {
+  const workspaceId = useEntrepotStore((s) => s.selectedId)
   const [clients, setClients] = useState<ClientStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -22,10 +25,11 @@ function Clients() {
   const [saving, setSaving] = useState(false)
 
   async function load() {
-    try { setLoading(true); setClients(await window.api.getClients() as ClientStats[]) }
-    catch { /* ignore */ } finally { setLoading(false) }
+    try { setLoading(true); setClients(await window.api.getClients(workspaceId || undefined) as ClientStats[]) }
+    catch (err: any) { feedback.toast.error(err.message || 'Impossible de charger les clients') }
+    finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [workspaceId])
 
   const filtered = clients.filter((c) =>
     c.client.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -40,16 +44,39 @@ function Clients() {
     if (!form.name.trim()) return
     try {
       setSaving(true)
-      if (editing) await window.api.updateClient(editing.id, form)
-      else await window.api.createClient(form)
-      setShowForm(false); load()
-    } catch (err) { console.error(err) } finally { setSaving(false) }
+      if (editing) {
+        await window.api.updateClient(editing.id, { ...form, warehouseId: workspaceId || undefined })
+        feedback.toast.success(`Client "${form.name}" modifié avec succès.`)
+      } else {
+        await window.api.createClient({ ...form, warehouseId: workspaceId || undefined })
+        feedback.toast.success(`Client "${form.name}" créé avec succès.`)
+      }
+      setShowForm(false)
+      load()
+    } catch (err: any) {
+      feedback.toast.error(err.message || 'Erreur lors de l\'enregistrement du client')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer ce client ?')) return
-    try { await window.api.deleteClient(id); load() }
-    catch (err) { console.error(err) }
+  function handleDelete(id: string, name: string) {
+    feedback.confirm({
+      title: 'Supprimer ce client ?',
+      message: 'Cette action supprimera la fiche client. L\'historique des factures existantes sera conservé.',
+      itemName: name,
+      confirmLabel: 'Supprimer le client',
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          await window.api.deleteClient(id)
+          feedback.toast.success(`Client "${name}" supprimé.`)
+          load()
+        } catch (err: any) {
+          feedback.toast.error(err.message || 'Erreur lors de la suppression du client')
+        }
+      }
+    })
   }
 
   function rankBadge(rank: string) {

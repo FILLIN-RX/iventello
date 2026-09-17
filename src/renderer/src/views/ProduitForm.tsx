@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Package, Tag, Image as ImageIcon, Upload, Trash2, ShieldAlert } from 'lucide-react'
+import { Package, Tag, Image as ImageIcon, Upload, Trash2, ShieldAlert, Scissors } from 'lucide-react'
+import { toFileUrl } from '../../../shared/imageUtils'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
 import { useSuppliers } from '../hooks/useSuppliers'
 import { useCategories } from '../hooks/useCategories'
+import { useEntrepotStore } from '../stores/entrepotStore'
 import { useNotifications } from '../stores/notificationStore'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Switch } from '../components/ui/switch'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select'
 import type { ProductWithRelations } from '../../../shared/types'
 
@@ -27,15 +30,20 @@ const defaultFields = [
 export function ProduitForm({ product, onSave, onCancel }: Props) {
   const { suppliers } = useSuppliers()
   const { categories } = useCategories()
+  const selectedWarehouseId = useEntrepotStore((s) => s.selectedId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
   // États de saisie
   const [form, setForm] = useState<Record<string, string>>({
     barcode: '', name: '', basePrice: '0', sellingPrice: '0', vatRate: '19.25',
-    supplierId: '__none__', categoryId: '__none__'
+    supplierId: '__none__', categoryId: '__none__',
+    initialQuantity: '0', alertLimit: '5'
   })
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
+  const [isPacket, setIsPacket] = useState(false)
+  const [itemsPerPacket, setItemsPerPacket] = useState('1')
+  const [unitSellingPrice, setUnitSellingPrice] = useState('')
   
   // États de gestion de l'image
   const [selectedImageFile, setSelectedImageFile] = useState<string | null>(null)
@@ -43,12 +51,15 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
 
   useEffect(() => {
     if (product) {
+      const currentStock = product.stocks?.find((s) => s.warehouse?.id === selectedWarehouseId)
       setForm({
         barcode: product.barcode, name: product.name,
         basePrice: product.basePrice.toString(), sellingPrice: product.sellingPrice.toString(),
         vatRate: product.vatRate.toString(),
         supplierId: product.supplierId ?? '__none__',
-        categoryId: product.categoryId ?? '__none__'
+        categoryId: product.categoryId ?? '__none__',
+        initialQuantity: currentStock ? currentStock.quantity.toString() : '0',
+        alertLimit: currentStock ? currentStock.alertLimit.toString() : '5'
       })
       setImageUrl(product.imageUrl ?? '')
       setSelectedImageFile(null)
@@ -59,8 +70,11 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
         if (v) vals[f.key] = v
       }
       setFieldValues(vals)
+      setIsPacket(product.isPacket)
+      setItemsPerPacket(product.itemsPerPacket.toString())
+      setUnitSellingPrice(product.unitSellingPrice?.toString() ?? '')
     }
-  }, [product])
+  }, [product, selectedWarehouseId])
 
   // Détection du scanner de code-barres matériel
   useBarcodeScanner((barcode) => setForm((f) => ({ ...f, barcode })))
@@ -95,16 +109,20 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
     try {
       setSaving(true)
       
-      // L'imageUrl finale en base de données. 
-      // Si une nouvelle image locale a été sélectionnée, on met temporairement à vide puis on la copiera.
       let finalImageUrl = selectedImageFile ? '' : imageUrl
 
       const data: Record<string, any> = {
+        warehouseId: selectedWarehouseId || null,
         barcode: form.barcode.trim(), name: form.name.trim(),
         basePrice: parseFloat(form.basePrice) || 0, sellingPrice: parseFloat(form.sellingPrice) || 0,
         vatRate: parseFloat(form.vatRate) || 19.25,
         supplierId: form.supplierId === '__none__' ? null : form.supplierId,
         categoryId: form.categoryId === '__none__' ? null : form.categoryId,
+        initialQuantity: parseInt(form.initialQuantity, 10) || 0,
+        alertLimit: parseInt(form.alertLimit, 10) || 5,
+        isPacket,
+        itemsPerPacket: isPacket ? parseInt(itemsPerPacket, 10) || 1 : 1,
+        unitSellingPrice: isPacket && unitSellingPrice ? parseFloat(unitSellingPrice) : null,
         imageUrl: finalImageUrl || null
       }
       
@@ -212,7 +230,7 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
                 />
               </div>
 
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Taux de TVA (%)</Label>
                 <Input 
                   type="number" 
@@ -220,6 +238,30 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
                   min="0" 
                   value={form.vatRate} 
                   onChange={(e) => setField('vatRate', e.target.value)} 
+                  className="h-10 bg-background" 
+                />
+              </div>
+
+              {!product && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-blue-600 dark:text-blue-400">Stock initial (Boutique)</Label>
+                  <Input 
+                    type="number" 
+                    min="0" 
+                    value={form.initialQuantity} 
+                    onChange={(e) => setField('initialQuantity', e.target.value)} 
+                    className="h-10 bg-background font-medium text-blue-600 dark:text-blue-400" 
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Seuil d'alerte stock</Label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  value={form.alertLimit} 
+                  onChange={(e) => setField('alertLimit', e.target.value)} 
                   className="h-10 bg-background" 
                 />
               </div>
@@ -281,7 +323,7 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
                 {selectedImageFile || imageUrl ? (
                   <>
                     <img 
-                      src={selectedImageFile ? `local-file://${selectedImageFile}` : imageUrl.startsWith('http') ? imageUrl : `local-file://${imageUrl}`} 
+                      src={selectedImageFile ? toFileUrl(selectedImageFile) : imageUrl.startsWith('http') ? imageUrl : toFileUrl(imageUrl)} 
                       alt="Aperçu du produit" 
                       className="h-full w-full object-cover transition-transform group-hover:scale-105 duration-200" 
                     />
@@ -294,7 +336,7 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground p-4 text-center">
                     <ImageIcon className="h-10 w-10 stroke-[1.2]" />
                     <p className="text-xs">Aucune image configurée</p>
-                    <Button type="button" size="xs" variant="outline" onClick={handleSelectImage} className="mt-1">
+                    <Button type="button" size="sm" variant="outline" onClick={handleSelectImage} className="mt-1">
                       <Upload className="h-3 w-3 mr-1" /> Choisir un fichier
                     </Button>
                   </div>
@@ -314,11 +356,35 @@ export function ProduitForm({ product, onSave, onCancel }: Props) {
                   className="h-9 text-xs bg-background" 
                 />
               </div>
-
             </div>
           </div>
 
-          {/* Section 4 : Caractéristiques personnalisées */}
+          {/* Section 4 : Conditionnement */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Scissors className="h-4 w-4" /> Conditionnement
+            </h3>
+            <div className="rounded-xl border bg-muted/20 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium cursor-pointer">Est un packet (lot de plusieurs articles)</Label>
+                <Switch checked={isPacket} onCheckedChange={setIsPacket} />
+              </div>
+              {isPacket && (
+                <div className="space-y-3 border-l-2 border-primary/20 pl-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Articles par packet</Label>
+                    <Input type="number" min="1" step="1" value={itemsPerPacket} onChange={(e) => setItemsPerPacket(e.target.value)} className="h-9 bg-background" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Prix unitaire de revente (FCFA)</Label>
+                    <Input type="number" step="0.01" min="0" value={unitSellingPrice} onChange={(e) => setUnitSellingPrice(e.target.value)} placeholder="Optionnel" className="h-9 bg-background" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 5 : Caractéristiques personnalisées */}
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fiche Technique (Détails)</h3>
             <div className="rounded-xl border bg-muted/20 p-5 space-y-3 max-h-[300px] overflow-y-auto pr-1 shadow-inner">

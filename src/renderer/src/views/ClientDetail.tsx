@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Mail, Phone, MapPin, FileText, Star, TrendingUp, ShoppingCart } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, MapPin, FileText, Star, TrendingUp, ShoppingCart, Clock } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -61,7 +61,10 @@ function ClientDetail({ clientId, onBack, onUpdate }: Props) {
           {sales.length === 0 && <p className="text-sm text-muted-foreground">Aucune facture.</p>}
           {sales.length > 0 && (
             <div className="space-y-2">
-              {sales.map((sale) => (
+              {sales.map((sale) => {
+                const avance = (sale as any).montantAvance as number | null
+                const reste = avance != null ? sale.finalTotal - avance : 0
+                return (
                 <div key={sale.id} className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <p className="text-sm font-medium">
@@ -70,13 +73,28 @@ function ClientDetail({ clientId, onBack, onUpdate }: Props) {
                     <p className="text-xs text-muted-foreground">
                       {sale.paymentMethod}  |  {sale.warehouse.name}  |  {sale.items?.length ?? 0} article(s)
                     </p>
+                    {sale.status === 'EN_ATTENTE' && (
+                      <p className="flex items-center gap-1 text-xs text-amber-600 mt-0.5">
+                        <Clock className="h-3 w-3" /> En attente
+                        {reste > 0 && ` — reste ${formatCurrency(reste)}`}
+                      </p>
+                    )}
+                    {sale.status === 'VALIDE' && reste > 0 && (
+                      <p className="flex items-center gap-1 text-xs text-blue-600 mt-0.5">
+                        Validée — reste {formatCurrency(reste)}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="font-bold">{formatCurrency(sale.finalTotal)}</p>
+                    {avance != null && (
+                      <p className="text-xs text-amber-600">Avance: {formatCurrency(avance)}</p>
+                    )}
                     {sale.discount > 0 && <p className="text-xs text-muted-foreground">Remise: -{formatCurrency(sale.discount)}</p>}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>

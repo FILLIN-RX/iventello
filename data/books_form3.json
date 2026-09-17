@@ -1,0 +1,20 @@
+[
+  { "title": "Innovative English", "author": "Jator-Bangsi", "publisher": "MONDOUX", "price": 3600, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "A Pen Kills", "author": "Lucas Ntang Tasi", "publisher": "NMI", "price": 2500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "My Cameroon and others Poems", "author": "Charlie Bey", "publisher": "Peng Edition", "price": 1800, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "Inclusive Education: The Way to go", "author": "Douglas Achingale", "publisher": "NYAA Publ.", "price": 1800, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "French Form 3", "author": "Molonta, Mounchikpou", "publisher": "Africa Education", "price": 3900, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_FR" },
+  { "title": "The Essential Logic for Ordinary Level", "author": "Ngwonam Denis", "publisher": "Grassroots", "price": 2500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "An Integrated History since 1850 for Forms 3, 4, 5", "author": "Munang R.C.", "publisher": "Quality Print", "price": 6000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_HIST" },
+  { "title": "New 21st Century Physical, Human and Cameroon Geography", "author": "Nchangwi S., Che B., Nchangwi P.", "publisher": "Grassroots", "price": 8000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_GEO" },
+  { "title": "International Students' Atlas (Forms III to V)", "author": "Patrick Wiegand", "publisher": "Oxford", "price": 6000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_GEO" },
+  { "title": "Citizenship Education Form 3", "author": "Fandjio M., Afoni E.", "publisher": "CATWA", "price": 3000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_SCI" },
+  { "title": "Contextual Food and Nutrition for Form 3", "author": "N.M. Brino", "publisher": "Grace Publ.", "price": 4500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ENG" },
+  { "title": "Economics for GCE O Level and ITVE F. 3, 4 and 5", "author": "Jua, Asunkeng, Bushu", "publisher": "CATWA", "price": 7000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ECO" },
+  { "title": "Success in Commerce Forms 3, 4 and 5", "author": "Ajeh Mesumbe", "publisher": "Grace Publ.", "price": 7000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ECO" },
+  { "title": "Prime Mathematics Form 3", "author": "Tasah, Ngew, Gene", "publisher": "NMI", "price": 4200, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_MATH" },
+  { "title": "Physics Form 3", "author": "Mpacko E. Ivo", "publisher": "Grace Publ.", "price": 4500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_PHY" },
+  { "title": "Understanding Chemistry, Forms 3, 4 and 5", "author": "Njike N., Funjong B.", "publisher": "TEWA Books", "price": 6500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_CHEM" },
+  { "title": "Understanding Biology Form 3", "author": "Tapong Sylvester", "publisher": "Greenworld", "price": 6500, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_BIO" },
+  { "title": "Prime ICT Form 3", "author": "Agwe, Ngwa, Arrey N.", "publisher": "NMI", "price": 4000, "classLevelCode": "ANG_FM3", "subjectCode": "ANG_ICT" }
+]

@@ -1,0 +1,16 @@
+[
+  { "title": "Prime English Form 1", "author": "Egbe Besong, Mesei M.", "publisher": "NMI", "price": 3800, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" },
+  { "title": "Fireside Tales", "author": "Charlie-Bey", "publisher": "Peng Edition", "price": 2000, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" },
+  { "title": "An Introduction to Poetry, Vol. 1", "author": "Akem H., Ngwobella M.", "publisher": "Shiloh Printers", "price": 1200, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" },
+  { "title": "Clean School", "author": "Arrey Etta M.C. Bessong", "publisher": "MONDOUX", "price": 1000, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" },
+  { "title": "French Form 1", "author": "Dady, Sanama, Kuetche", "publisher": "MONDOUX", "price": 3600, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_FR" },
+  { "title": "History for Form 1", "author": "Sabum H. Dingbobga", "publisher": "Grassroots", "price": 3200, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_HIST" },
+  { "title": "Geography for Competency Development Book 1", "author": "Shey D. Edie Nnane", "publisher": "Greenworld", "price": 3000, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_GEO" },
+  { "title": "The Patriotic Citizen Book 1", "author": "Nanje N., Chop L., She", "publisher": "Greenworld", "price": 4000, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" },
+  { "title": "Integrated Secondary Mathematic Form 1", "author": "Ajeck K., Siepe R., W.", "publisher": "Shiloh Printers", "price": 3500, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_MATH" },
+  { "title": "Prime Physics Form 1", "author": "Che Fuh, Munjam C.", "publisher": "NMI", "price": 3200, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_PHY" },
+  { "title": "Elementary Chemistry for Form 1", "author": "Mbuli k., Shitteh G.", "publisher": "TEWA Books", "price": 3000, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_CHEM" },
+  { "title": "Emerging Biology Book 1", "author": "Toulack K., Diang J.", "publisher": "Global Publisher", "price": 3500, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_BIO" },
+  { "title": "Computer Science for Form 1", "author": "Forndem F., Tangunu", "publisher": "Grassroots", "price": 3500, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ICT" },
+  { "title": "Contextual Home Economics Form 1", "author": "N.M. Brino", "publisher": "Grace Publishers", "price": 4500, "classLevelCode": "ANG_FM1", "subjectCode": "ANG_ENG" }
+]

@@ -5,6 +5,7 @@ import { useProducts } from '../hooks/useProducts'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { feedback } from '../stores/feedbackStore'
 import type { StockAlert } from '../../../shared/types'
 
 function Alertes() {
@@ -17,12 +18,12 @@ function Alertes() {
   const groups = new Map<string, StockAlert[]>()
   const noWarehouse: StockAlert[] = []
   for (const a of alerts) {
-    const key = a.warehouse?.name ?? 'Sans entrepôt'
-    if (key === 'Sans entrepôt') noWarehouse.push(a)
+    const key = a.warehouse?.name ?? 'Sans boutique'
+    if (key === 'Sans boutique') noWarehouse.push(a)
     else { const g = groups.get(key) ?? []; g.push(a); groups.set(key, g) }
   }
   const groupEntries: [string, StockAlert[]][] = [...groups.entries()]
-  if (noWarehouse.length > 0) groupEntries.push(['Sans entrepôt', noWarehouse])
+  if (noWarehouse.length > 0) groupEntries.push(['Sans boutique', noWarehouse])
 
   async function handleExport() {
     try {
@@ -33,18 +34,27 @@ function Alertes() {
         alerts: alerts.map(a => ({ name: a.product.name, barcode: a.product.barcode, quantity: a.stock.quantity, alertLimit: a.stock.alertLimit, warehouse: a.warehouse.name })),
         totalProducts: products.length, totalValue, alertCount: alerts.length, date: new Date().toLocaleString('fr-FR')
       })
-      alert(`Rapport exporté : ${path}`)
-    } catch (err) { console.error(err); alert("Erreur d'export.") }
-    finally { setExporting(false) }
+      feedback.toast.success('Rapport exporté', `Fichier enregistré : ${path}`)
+    } catch (err: any) {
+      console.error(err)
+      feedback.toast.error(err?.message || 'Erreur lors de l\'export du rapport', 'Erreur')
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function handleAnalyze() {
     try {
       setAnalyzing(true)
       const result = await window.api.analyzeStock()
+      feedback.toast.success('Analyse terminée', `Bon généré : ${result.pdfPath} (${result.orders.length} produit(s))`)
       setAnalysisResult(`Bon de commande généré : ${result.pdfPath} (${result.orders.length} produit(s))`)
-    } catch (err) { console.error(err); alert("Erreur d'analyse.") }
-    finally { setAnalyzing(false) }
+    } catch (err: any) {
+      console.error(err)
+      feedback.toast.error(err?.message || 'Erreur lors de l\'analyse', 'Erreur')
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   return (
@@ -59,7 +69,7 @@ function Alertes() {
             <ClipboardList className={`mr-2 h-4 w-4 ${analyzing ? 'animate-pulse' : ''}`} />
             {analyzing ? 'Analyse...' : 'Analyser & commander'}
           </Button>
-          <Button variant="outline" onClick={refetch} disabled={loading}>
+          <Button variant="outline" onClick={() => refetch()} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Actualiser
           </Button>

@@ -2,12 +2,18 @@ import { PrismaClient } from '@prisma/client'
 
 export function createSupplierService(prisma: PrismaClient) {
   return {
-    async getAll() {
-      return prisma.supplier.findMany({ orderBy: { name: 'asc' } })
+    async getAll(warehouseId?: string) {
+      const where = warehouseId ? { OR: [{ warehouseId }, { warehouseId: null }] } : {}
+      return prisma.supplier.findMany({ where, orderBy: { name: 'asc' } })
     },
 
-    async create(data: { name: string; email?: string; phone?: string; address?: string }) {
-      return prisma.supplier.create({ data })
+    async create(data: { name: string; email?: string; phone?: string; address?: string; warehouseId?: string }) {
+      const { warehouseId, ...rest } = data
+      const createData: any = { ...rest }
+      if (warehouseId) {
+        createData.warehouse = { connect: { id: warehouseId } }
+      }
+      return prisma.supplier.create({ data: createData })
     },
 
     async update(id: string, data: Partial<{ name: string; email: string; phone: string; address: string }>) {

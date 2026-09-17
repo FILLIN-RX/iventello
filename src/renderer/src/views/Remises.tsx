@@ -104,7 +104,7 @@ export default function Remises() {
                 <th className="px-4 py-3 text-right">Montant remisé</th>
                 <th className="px-4 py-3 text-right">Total vente</th>
                 <th className="px-4 py-3 text-left">Paiement</th>
-                <th className="px-4 py-3 text-left">Entrepôt</th>
+                <th className="px-4 py-3 text-left">Boutique</th>
               </tr>
             </thead>
             <tbody className="divide-y">

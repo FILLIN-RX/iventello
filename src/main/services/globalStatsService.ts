@@ -2,33 +2,91 @@ import { PrismaClient } from '@prisma/client'
 
 export function createGlobalStatsService(prisma: PrismaClient) {
   return {
-    async getStats() {
-      const warehouses = await prisma.warehouse.findMany({ include: { _count: { select: { stocks: true } } } })
+    async getStats(userId?: string) {
+      const whereClause = userId ? {
+        userAccess: {
+          some: {
+            userId
+          }
+        }
+      } : {}
+
+      const warehouses = await prisma.warehouse.findMany({
+        where: whereClause,
+        include: { _count: { select: { stocks: true } } }
+      })
       const totalWarehouses = warehouses.length
+      const warehouseIds = warehouses.map(w => w.id)
 
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-      const [sales, stocks, stockAggregates] = await Promise.all([
+      const [posSales, bookSales, serviceSales, canalSales, stocks, stockAggregates] = await Promise.all([
         prisma.sale.findMany({
-          where: { createdAt: { gte: startOfMonth } },
+          where: {
+            warehouseId: { in: warehouseIds },
+            status: { not: 'ANNULE' },
+            createdAt: { gte: startOfMonth }
+          },
           select: { warehouseId: true, finalTotal: true }
         }),
+        prisma.bookSale.findMany({
+          where: {
+            warehouseId: { in: warehouseIds },
+            createdAt: { gte: startOfMonth }
+          },
+          select: { warehouseId: true, totalAmount: true, discount: true }
+        }),
+        prisma.serviceSale.findMany({
+          where: {
+            warehouseId: { in: warehouseIds },
+            createdAt: { gte: startOfMonth }
+          },
+          select: { warehouseId: true, totalAmount: true }
+        }),
+        prisma.canalPlusSale.findMany({
+          where: {
+            warehouseId: { in: warehouseIds },
+            createdAt: { gte: startOfMonth }
+          },
+          select: { warehouseId: true, amount: true }
+        }),
         prisma.stock.findMany({
-          where: { alertLimit: { gt: 0 } },
+          where: {
+            warehouseId: { in: warehouseIds },
+            alertLimit: { gt: 0 }
+          },
           select: { warehouseId: true, quantity: true, alertLimit: true }
         }),
         prisma.stock.groupBy({
           by: ['warehouseId'],
+          where: { warehouseId: { in: warehouseIds } },
           _sum: { quantity: true },
         })
       ])
 
       const salesByWarehouse: Record<string, number> = {}
       let totalSales = 0
-      for (const s of sales) {
-        salesByWarehouse[s.warehouseId] = (salesByWarehouse[s.warehouseId] || 0) + s.finalTotal
-        totalSales += s.finalTotal
+
+      for (const s of posSales) {
+        const val = s.finalTotal || 0
+        salesByWarehouse[s.warehouseId] = (salesByWarehouse[s.warehouseId] || 0) + val
+        totalSales += val
+      }
+      for (const bs of bookSales) {
+        const val = (bs.totalAmount || 0) - (bs.discount || 0)
+        salesByWarehouse[bs.warehouseId] = (salesByWarehouse[bs.warehouseId] || 0) + val
+        totalSales += val
+      }
+      for (const ss of serviceSales) {
+        const val = ss.totalAmount || 0
+        salesByWarehouse[ss.warehouseId] = (salesByWarehouse[ss.warehouseId] || 0) + val
+        totalSales += val
+      }
+      for (const cs of canalSales) {
+        const val = cs.amount || 0
+        salesByWarehouse[cs.warehouseId] = (salesByWarehouse[cs.warehouseId] || 0) + val
+        totalSales += val
       }
 
       let totalProducts = 0

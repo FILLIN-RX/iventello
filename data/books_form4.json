@@ -1,0 +1,19 @@
+[
+  { "title": "Prime English, Form 4", "author": "Egbe Besong Elvis", "publisher": "NMI", "price": 4200, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_ENG" },
+  { "title": "Macbeth", "author": "W. Shakespeare", "publisher": "New Swan Edit.", "price": 0, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_LIT" },
+  { "title": "Lord of the Flies", "author": "William Golding", "publisher": "Longman", "price": 0, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_LIT" },
+  { "title": "The Crown of Thorns", "author": "L.T. Asong", "publisher": "Grace Publisher", "price": 3500, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_LIT" },
+  { "title": "Modern Anthology of Poetry", "author": "Hans Bokwe Itoe", "publisher": "N/A", "price": 0, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_LIT" },
+  { "title": "French Form 4", "author": "Dady, Sanama, Kuetche", "publisher": "MONDOUX", "price": 3600, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_FR" },
+  { "title": "The Essential Logic for Ordinary Level", "author": "Ngwonam Denis", "publisher": "Grassroots", "price": 2500, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_ENG" },
+  { "title": "An Integrated History since 1850 for Forms 3, 4, 5", "author": "Munang R.C.", "publisher": "Quality Print", "price": 6000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_HIST" },
+  { "title": "New 21st Century Physical, Human and Cameroon Geography for Forms 3, 4 and 5", "author": "Nchangwi Sebastian", "publisher": "Grassroots", "price": 8000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_GEO" },
+  { "title": "Basic Geology for Colleges, Forms 4 and 5", "author": "Takwi Henry", "publisher": "TEWA Books", "price": 5000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_GEO" },
+  { "title": "The Advocate for Citizenship Education, F. 4 and 5", "author": "Venantius Kum Ngwoh", "publisher": "Grace Publ.", "price": 4000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_SCI" },
+  { "title": "Economics for GCE O Level and ITVE F. 3, 4 and 5", "author": "Jua, Asunkeng, Bushu", "publisher": "CATWA", "price": 7000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_ECO" },
+  { "title": "Success in Commerce Forms 3, 4 and 5", "author": "Ajeh Mesumbe", "publisher": "Grace Publ.", "price": 7000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_ECO" },
+  { "title": "Prime Mathematics Forms 4 and 5", "author": "Tasah, Ngew, Gene", "publisher": "NMI", "price": 5500, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_MATH" },
+  { "title": "Explaining Additional Mathematics", "author": "Atanga A.", "publisher": "NAARAT", "price": 9000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_MATH" },
+  { "title": "Standard Physics, Form 4", "author": "Tam P., Awandja", "publisher": "Dominion", "price": 5000, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_PHY" },
+  { "title": "Understanding Chemistry Forms 3, 4 and 5", "author": "Njike Nchoph, Funjung", "publisher": "TEWA Books", "price": 6500, "classLevelCode": "ANG_FM4", "subjectCode": "ANG_CHEM" }
+]

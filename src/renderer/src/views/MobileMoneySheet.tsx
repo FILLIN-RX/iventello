@@ -135,7 +135,7 @@ export function MobileMoneySheet() {
     const exportRows = Object.entries(monthData).map(([dayStr, row]) => ({
       day: Number(dayStr),
       ...row
-    }))
+    })) as any
 
     try {
       await window.api.exportMobileMoneyExcel({
@@ -180,7 +180,7 @@ export function MobileMoneySheet() {
   }
 
   if (!selectedId) {
-    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez un entrepôt</div>
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez une boutique</div>
   }
 
   const key = monthKey(currentTab.year, currentTab.month)

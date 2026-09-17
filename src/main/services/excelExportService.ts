@@ -81,7 +81,7 @@ async function saveWorkbook(wb: Excel.Workbook, defaultName: string): Promise<st
   })
   if (result.canceled || !result.filePath) return ''
   const buf = await wb.xlsx.writeBuffer()
-  await writeFile(result.filePath, buf as Buffer)
+  await writeFile(result.filePath, Buffer.from(buf))
   return result.filePath
 }
 
@@ -398,4 +398,86 @@ export async function exportCanalPlusExcel(params: {
 
   autoColWidth(ws, 16)
   return saveWorkbook(wb, `CanalPlus_${month}`)
+}
+
+// ── Export Catalogue Produits ───────────────────────────────────────────
+
+export async function exportProductsExcel(products: any[]): Promise<string> {
+  const wb = new Excel.Workbook()
+  const ws = wb.addWorksheet('Catalogue Produits')
+
+  // Titre
+  ws.mergeCells(1, 1, 1, 8)
+  const titleCell = ws.getCell('A1')
+  titleCell.value = `CATALOGUE PRODUITS IVENTELLO (${products.length} articles)`
+  titleCell.font = TITLE_FONT
+  ws.getRow(1).height = 30
+
+  // Sous-titre date
+  ws.mergeCells(2, 1, 2, 8)
+  const subCell = ws.getCell('A2')
+  subCell.value = `Exporté le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`
+  subCell.font = SUBTITLE_FONT
+  ws.getRow(2).height = 20
+
+  // En-têtes (compatibles modèle d'import)
+  const headers = [
+    'Code-barres',
+    'Nom du produit',
+    'Catégorie',
+    'Fournisseur',
+    'Prix de Vente',
+    'Prix d\'Achat',
+    'Quantité Stock',
+    'Seuil d\'Alerte'
+  ]
+  applyHeader(ws, 4, headers)
+
+  // Données
+  let rowIdx = 5
+  let totalStock = 0
+
+  for (const p of products) {
+    const stockQty = typeof p.stockTotal === 'number'
+      ? p.stockTotal
+      : (p.stocks && Array.isArray(p.stocks)
+        ? p.stocks.reduce((s: number, st: any) => s + (st.quantity ?? 0), 0)
+        : (p.quantity ?? 0))
+
+    const alertL = (p.stocks && p.stocks[0]?.alertLimit) ?? p.alertLimit ?? 5
+    const catName = p.category?.name || p.categoryName || ''
+    const supplierName = p.supplier?.name || p.supplierName || ''
+    const sellPrice = p.sellingPrice || 0
+    const buyPrice = p.basePrice || 0
+
+    totalStock += stockQty
+
+    applyDataRow(
+      ws,
+      rowIdx,
+      [
+        p.barcode || '',
+        p.name || '',
+        catName,
+        supplierName,
+        sellPrice,
+        buyPrice,
+        stockQty,
+        alertL
+      ],
+      false
+    )
+    rowIdx++
+  }
+
+  // Ligne de Total
+  applyDataRow(
+    ws,
+    rowIdx,
+    ['TOTAL', `${products.length} réf.`, '', '', '', '', totalStock, ''],
+    true
+  )
+
+  autoColWidth(ws, 14, 35)
+  return saveWorkbook(wb, `Catalogue_Produits_${new Date().toISOString().slice(0, 10)}`)
 }

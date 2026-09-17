@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { FileText, Search, User, ShoppingBag, CreditCard, Eye, CheckCircle, XCircle, RotateCcw, UserCheck } from 'lucide-react'
+import { FileText, Search, User, ShoppingBag, CreditCard, Eye, CheckCircle, XCircle, RotateCcw, UserCheck, Clock, FolderArchive, Calendar } from 'lucide-react'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { FactureDetailModal } from '../components/FactureDetailModal'
+import { ScanFacturesModal } from '../components/ScanFacturesModal'
+import { feedback } from '../stores/feedbackStore'
+import { useEntrepotStore } from '../stores/entrepotStore'
 import type { SaleWithClient, SaleStatus } from '../../../shared/types'
 import { formatCurrency } from '@/lib/utils'
 
@@ -25,39 +28,68 @@ const STATUS_COLORS: Record<SaleStatus, string> = {
   ANNULE: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
 }
 
-export default function Factures() {
+interface Props {
+  onNavigateToStock?: () => void
+}
+
+export default function Factures({ onNavigateToStock }: Props) {
+  const workspaceId = useEntrepotStore((s) => s.selectedId)
   const [sales, setSales] = useState<SaleWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedSale, setSelectedSale] = useState<SaleWithClient | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [statutFilter, setStatutFilter] = useState<string | null>(null)
+  const [showScanModal, setShowScanModal] = useState(false)
 
-  function load() {
-    setLoading(true)
-    window.api.getSales().then((s: any) => { setSales(s); setLoading(false) })
+  async function load() {
+    try {
+      setLoading(true)
+      const data = await window.api.getSales(undefined, workspaceId || undefined)
+      setSales(data as SaleWithClient[])
+    } catch (err: any) {
+      feedback.toast.error(err?.message || 'Impossible de charger les factures')
+    } finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
 
-  const filtered = sales.filter(s =>
-    (s.client?.name ?? 'anonyme').toLowerCase().includes(search.toLowerCase()) ||
-    s.warehouse.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.paymentMethod.toLowerCase().includes(search.toLowerCase()) ||
-    s.id.toLowerCase().includes(search.toLowerCase()) ||
-    s.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
-    (s.status || '').toLowerCase().includes(search.toLowerCase()) ||
-    (s.agent?.name ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = sales.filter(s => {
+    // Filtre par statut
+    if (statutFilter === 'AVANCES_EN_COURS') {
+      const avance = (s as any).montantAvance as number | null
+      const reste = avance != null ? s.finalTotal - avance : 0
+      return (s.status === 'EN_ATTENTE' || (s.status === 'VALIDE' && reste > 0))
+    }
+    if (statutFilter && s.status !== statutFilter) return false
+
+    // Filtre texte
+    return (
+      (s.client?.name ?? 'anonyme').toLowerCase().includes(search.toLowerCase()) ||
+      s.warehouse.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.paymentMethod.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
+      (s.status || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.agent ? `${s.agent.prenom} ${s.agent.nom}` : '').toLowerCase().includes(search.toLowerCase())
+    )
+  })
 
   const totalCA = filtered.reduce((s, v) => s + v.finalTotal, 0)
+  const totalResteDu = filtered.reduce((sum, s) => {
+    const avance = (s as any).montantAvance as number | null
+    if (avance != null && avance < s.finalTotal) return sum + (s.finalTotal - avance)
+    return sum
+  }, 0)
 
   async function handleValidate(saleId: string) {
     setActionLoading(saleId)
     try {
       await window.api.validateSale(saleId)
+      feedback.toast.success('Facture validée avec succès')
       load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erreur')
+    } catch (err: any) {
+      feedback.toast.error(err?.message || 'Erreur lors de la validation')
     } finally { setActionLoading(null) }
   }
 
@@ -65,21 +97,31 @@ export default function Factures() {
     setActionLoading(saleId)
     try {
       await window.api.paySale(saleId)
+      feedback.toast.success('Paiement enregistré', 'La facture est marquée comme payée.')
       load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erreur')
+    } catch (err: any) {
+      feedback.toast.error(err?.message || 'Erreur lors du paiement')
     } finally { setActionLoading(null) }
   }
 
-  async function handleCancel(saleId: string) {
-    if (!confirm('Annuler cette facture ? Le stock sera restitué.')) return
-    setActionLoading(saleId)
-    try {
-      await window.api.cancelSale(saleId)
-      load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erreur')
-    } finally { setActionLoading(null) }
+  function handleCancel(saleId: string) {
+    feedback.confirm({
+      title: 'Annuler cette facture ?',
+      message: 'Les articles vendus seront automatiquement réintégrés dans les stocks de la boutique.',
+      itemName: `Facture #${saleId.slice(0, 8)}`,
+      confirmLabel: 'Annuler la facture',
+      variant: 'destructive',
+      onConfirm: async () => {
+        setActionLoading(saleId)
+        try {
+          await window.api.cancelSale(saleId)
+          feedback.toast.success('Facture annulée', 'Le stock a été restitué.')
+          load()
+        } catch (err: any) {
+          feedback.toast.error(err?.message || 'Erreur lors de l\'annulation')
+        } finally { setActionLoading(null) }
+      }
+    })
   }
 
   function canValidate(s: SaleWithClient): boolean {
@@ -94,24 +136,64 @@ export default function Factures() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText className="h-6 w-6 text-primary" /> Factures & Ventes
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Historique de toutes les ventes</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Historique de toutes les ventes et archivage par date</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">CA filtré</p>
-          <p className="text-xl font-bold text-primary">
-            {formatCurrency(totalCA)}
-          </p>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowScanModal(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-4 gap-2 shadow-sm"
+          >
+            <FolderArchive className="h-4 w-4" /> Scan & Archiver par Date
+          </Button>
+
+          <div className="text-right pl-3 border-l border-border">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">CA filtré</p>
+            <p className="text-lg font-black text-primary tabular-nums">
+              {formatCurrency(totalCA)}
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* Filtres rapides */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant={statutFilter === null ? 'default' : 'outline'} size="sm" onClick={() => setStatutFilter(null)}>
+          Toutes
+        </Button>
+        <Button variant={statutFilter === 'EN_ATTENTE' ? 'default' : 'outline'} size="sm" onClick={() => setStatutFilter('EN_ATTENTE')}>
+          En attente
+        </Button>
+        <Button variant={statutFilter === 'VALIDE' ? 'default' : 'outline'} size="sm" onClick={() => setStatutFilter('VALIDE')}>
+          Validées
+        </Button>
+        <Button variant={statutFilter === 'PAYE' ? 'default' : 'outline'} size="sm" onClick={() => setStatutFilter('PAYE')}>
+          Payées
+        </Button>
+        <Button variant={statutFilter === 'ANNULE' ? 'default' : 'outline'} size="sm" onClick={() => setStatutFilter('ANNULE')}>
+          Annulées
+        </Button>
+        <Button
+          variant={statutFilter === 'AVANCES_EN_COURS' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setStatutFilter('AVANCES_EN_COURS')}
+          className={statutFilter === 'AVANCES_EN_COURS' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'text-amber-600 border-amber-300'}
+        >
+          <Clock className="h-3.5 w-3.5 mr-1" /> Avances en cours
+          {statutFilter === 'AVANCES_EN_COURS' && totalResteDu > 0 && (
+            <span className="ml-1.5 text-xs opacity-90">({formatCurrency(totalResteDu)})</span>
+          )}
+        </Button>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Rechercher par client, entrepôt, statut, agent, paiement…" value={search} onChange={e => setSearch(e.target.value)} className="pl-10 h-11 rounded-lg" />
+        <Input placeholder="Rechercher par client, boutique, statut, agent, paiement…" value={search} onChange={e => setSearch(e.target.value)} className="pl-10 h-11 rounded-lg" />
       </div>
 
       {loading && <div className="flex justify-center py-12"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
@@ -133,11 +215,12 @@ export default function Factures() {
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Facture</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Client</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Entrepôt</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Boutique</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Statut</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Agent</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Paiement</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reste dû</th>
                 <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
               </tr>
             </thead>
@@ -158,14 +241,25 @@ export default function Factures() {
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">{s.warehouse.name}</td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLORS[s.status as SaleStatus] ?? 'bg-muted text-muted-foreground'}`}>
-                      {STATUS_LABELS[s.status as SaleStatus] ?? s.status}
-                    </span>
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLORS[s.status as SaleStatus] ?? 'bg-muted text-muted-foreground'}`}>
+                        {STATUS_LABELS[s.status as SaleStatus] ?? s.status}
+                      </span>
+                      {s.isPendingDelivery && s.deliveryStatus !== 'LIVRE' ? (
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${s.deliveryStatus === 'DISPONIBLE' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                          {s.deliveryStatus === 'DISPONIBLE' ? '📦 Disponible' : '🚚 Non livré'}
+                        </span>
+                      ) : s.deliveryStatus === 'LIVRE' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ Livré
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-muted-foreground">
                     {s.agent ? (
                       <span className="flex items-center gap-1">
-                        <UserCheck className="h-3 w-3" /> {s.agent.name}
+                        <UserCheck className="h-3 w-3" /> {s.agent.prenom} {s.agent.nom}
                       </span>
                     ) : <span className="italic">—</span>}
                   </td>
@@ -176,6 +270,14 @@ export default function Factures() {
                   </td>
                   <td className="px-5 py-3.5 text-right font-semibold text-primary whitespace-nowrap">
                     {formatCurrency(s.finalTotal)}
+                  </td>
+                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                    {(() => {
+                      const avance = (s as any).montantAvance as number | null
+                      const reste = avance != null ? s.finalTotal - avance : 0
+                      if (reste <= 0) return <span className="text-xs text-muted-foreground">—</span>
+                      return <span className="text-xs font-semibold text-amber-600">{formatCurrency(reste)}</span>
+                    })()}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-center gap-1">
@@ -210,6 +312,13 @@ export default function Factures() {
         open={selectedSale !== null}
         onClose={() => setSelectedSale(null)}
         sale={selectedSale}
+        onUpdate={load}
+      />
+
+      <ScanFacturesModal
+        open={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        workspaceId={workspaceId || undefined}
       />
     </div>
   )

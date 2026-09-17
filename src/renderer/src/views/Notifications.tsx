@@ -87,7 +87,7 @@ function Notifications({ warehouseId, warehouseName }: NotificationsProps) {
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <Bell className="mb-3 h-12 w-12" />
           <p className="text-sm font-medium">Aucune notification</p>
-          <p className="text-xs">{filter === 'all' ? (warehouseId ? 'Aucune notification pour cet entrepôt' : 'Rien pour le moment') : 'Aucune dans cette catégorie'}</p>
+          <p className="text-xs">{filter === 'all' ? (warehouseId ? 'Aucune notification pour cette boutique' : 'Rien pour le moment') : 'Aucune dans cette catégorie'}</p>
         </div>
       ) : (
         <div className="space-y-2">

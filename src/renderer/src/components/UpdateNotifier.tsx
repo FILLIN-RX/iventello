@@ -17,23 +17,31 @@ export function UpdateNotifier() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Vérifier les mises à jour au démarrage
-    window.api.checkForUpdates()
+    try {
+      window.api.checkForUpdates()
+    } catch {
+      // Silencieux — pas de release GitHub
+    }
 
-    window.api.onUpdateAvailable(() => {
+    const unsubAvailable = window.api.onUpdateAvailable(() => {
       setUpdateAvailable(true)
-      // On ne montre pas forcément un popup tout de suite pour ne pas déranger
     })
 
-    window.api.onUpdateDownloaded(() => {
+    const unsubDownloaded = window.api.onUpdateDownloaded(() => {
       setUpdateDownloaded(true)
-      setIsOpen(true) // Là on prévient l'utilisateur que c'est prêt
+      setIsOpen(true)
     })
 
-    window.api.onUpdateError((err: any) => {
-      console.error('Update error:', err)
-      // setError('Erreur lors de la mise à jour')
+    const unsubError = window.api.onUpdateError(() => {
+      // Ignoré — erreurs de type 404 filtrées côté main
     })
+
+    // Cleanup : suppression des listeners au démontage pour éviter les fuites mémoire
+    return () => {
+      unsubAvailable?.()
+      unsubDownloaded?.()
+      unsubError?.()
+    }
   }, [])
 
   const handleInstall = () => {

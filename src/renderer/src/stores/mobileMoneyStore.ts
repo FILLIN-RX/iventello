@@ -23,7 +23,7 @@ function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate()
 }
 
-function monthKey(year: number, month: number) {
+export function monthKey(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
@@ -153,6 +153,11 @@ export const useMobileMoneyStore = create<MmState>((set, get) => ({
       totalCommissions: getTotalCommissions(r),
       soldeReelAjuste: getSoldeReelAjuste(r)
     }))
-    await window.api.exportMobileMoneyExcel(warehouseId, key, exportData)
+    await window.api.exportMobileMoneyExcel({
+      month: key,
+      monthName: '',
+      warehouseName: warehouseId,
+      rows: exportData
+    })
   }
 }))

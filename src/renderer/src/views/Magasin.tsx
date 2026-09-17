@@ -5,6 +5,8 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { formatCurrency } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { ProductDetailModal } from '../components/ProductDetailModal'
+import { Eye } from 'lucide-react'
 
 interface MagasinStockItem {
   id: string
@@ -31,6 +33,7 @@ export default function Magasin() {
   const [transferQty, setTransferQty] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   const [success, setSuccess] = useState<string | null>(null)
+  const [selectedDetailProductId, setSelectedDetailProductId] = useState<string | null>(null)
 
   async function load() {
     if (!selectedId) return
@@ -63,7 +66,7 @@ export default function Magasin() {
   }
 
   if (!selectedId) {
-    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez un entrepôt</div>
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez une boutique</div>
   }
 
   const totalItems = stocks.reduce((s, i) => s + i.quantityMagasin, 0)
@@ -130,8 +133,21 @@ export default function Magasin() {
                   <tr key={item.id} className="hover:bg-muted/30 transition-colors border-b border-muted/20">
                     <td className="px-4 py-3 font-medium whitespace-nowrap">
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDetailProductId(item.productId)}
+                          className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-primary transition-colors"
+                          title="Voir la fiche détaillée du produit"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
                         <Package className="h-4 w-4 text-muted-foreground" />
-                        <span>{item.product.name}</span>
+                        <span
+                          className="cursor-pointer hover:underline hover:text-primary"
+                          onClick={() => setSelectedDetailProductId(item.productId)}
+                        >
+                          {item.product.name}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground font-mono text-xs whitespace-nowrap">{item.product.barcode}</td>
@@ -170,6 +186,14 @@ export default function Magasin() {
           </table>
         </div>
       )}
+
+      {/* Fiche Produit 360° détaillée */}
+      <ProductDetailModal
+        productId={selectedDetailProductId}
+        open={!!selectedDetailProductId}
+        onOpenChange={(open) => !open && setSelectedDetailProductId(null)}
+        onProductUpdated={() => load()}
+      />
     </div>
   )
 }

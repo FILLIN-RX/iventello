@@ -91,7 +91,7 @@ export function Services() {
   }
 
   if (!selectedId) {
-    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez un entrepôt</div>
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez une boutique</div>
   }
 
   const TABS: { id: TabId; label: string }[] = [

@@ -20,12 +20,17 @@ model User {
   notes             String?
   active            Boolean         @default(true)
 
+  securityQuestion  String?
+  securityAnswer    String?
+  recoveryCodeHash  String?
+
   // Cloud-ready fields (placeholders for future)
   externalId        String?         @unique
   cloudSyncedAt     DateTime?
 
   warehouseAccess   UserWarehouse[]
   agentSales        Sale[]          @relation("AgentSales") // Ventes liées à cet agent
+  cashSessions      CashSession[]
 
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -47,6 +52,7 @@ model Warehouse {
   location           String?
   logoUrl            String?
   mobileMoneyEnabled Boolean            @default(false)
+  librairieEnabled   Boolean            @default(false)
 
   // Invoice settings (per warehouse)
   invoiceCompanyName       String?
@@ -58,6 +64,10 @@ model Warehouse {
   invoiceCompanyLogo       String?
   invoiceCompanyDescription String?
   invoiceFooter            String?
+  invoiceTemplate          String?            @default("MODERNE")
+  invoiceColor             String?            @default("#2563eb")
+  invoiceTerms             String?
+  invoiceBankDetails       String?
 
   stocks             Stock[]
   sales              Sale[]
@@ -69,36 +79,59 @@ model Warehouse {
   discounts          Discount[]
   magasinTransactions MagasinTransaction[]
   userAccess         UserWarehouse[]
+  bookStocks         BookStock[]
+  bookSales          BookSale[]
+  purchaseOrders     PurchaseOrder[]
+  stockMovements     StockMovement[]
+  cashSessions       CashSession[]
+  products           Product[]
+  categories         Category[]
+  expenses           Expense[]
+  clients            Client[]
+  suppliers          Supplier[]
+  scannedDocuments   ScannedDocument[]
 }
 
 model Supplier {
-  id        String    @id @default(uuid())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  products  Product[]
-  createdAt DateTime  @default(now())
+  id          String     @id @default(uuid())
+  warehouseId String?
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  products    Product[]
+  createdAt   DateTime   @default(now())
+
+  @@index([warehouseId])
 }
 
 model Client {
-  id        String   @id @default(uuid())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  sales     Sale[]
-  createdAt DateTime @default(now())
+  id          String     @id @default(uuid())
+  warehouseId String?
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  notes       String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  sales       Sale[]
+  createdAt   DateTime   @default(now())
+
+  @@index([warehouseId])
 }
 
 model Product {
   id                String    @id @default(uuid())
-  barcode           String    @unique
+  warehouseId       String?
+  barcode           String
   name              String
   basePrice         Float
   sellingPrice      Float
   vatRate           Float     @default(19.25)
+  isPacket          Boolean   @default(false)
+  itemsPerPacket    Int       @default(1)
+  unitSellingPrice  Float?
   imageUrl          String?
   createdAt         DateTime  @default(now())
 
@@ -123,6 +156,8 @@ model Product {
   field10_label     String?   @default("Note interne")
   field10_value     String?
 
+  warehouse         Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
   supplierId        String?
   supplier          Supplier? @relation(fields: [supplierId], references: [id])
 
@@ -133,7 +168,12 @@ model Product {
   saleItems         SaleItem[]
   cashTransactionLines CashTransactionLine[]
   magasinTransactions MagasinTransaction[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  stockMovements      StockMovement[]
 
+  @@index([barcode])
+  @@index([warehouseId])
+  @@index([warehouseId, barcode])
   @@index([name])
   @@index([createdAt])
   @@index([supplierId])
@@ -141,22 +181,29 @@ model Product {
 }
 
 model Category {
-  id          String    @id @default(uuid())
-  name        String    @unique
+  id          String     @id @default(uuid())
+  warehouseId String?
+  name        String
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   products    Product[]
+
+  @@index([warehouseId])
 }
 
 model Expense {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
+  warehouseId String?
   title       String
   amount      Float
   category    String
-  date        DateTime @default(now())
+  date        DateTime   @default(now())
   description String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
+  @@index([warehouseId])
   @@index([date])
 }
 
@@ -205,6 +252,9 @@ model Sale {
   montantAvance    Float?     // Montant versé pour une avance (si différent du total)
   paymentMethod    String
   status           String     @default("EN_ATTENTE") // EN_ATTENTE | VALIDE | PAYE | ANNULE
+  isPendingDelivery Boolean   @default(false) // Vente en attente d'arrivage/livraison
+  deliveryStatus    String?   @default("NON_LIVRE") // NON_LIVRE | DISPONIBLE | LIVRE
+  notifiedAt        DateTime? // Date à laquelle le client a été prévenu de l'arrivage
   agentId          String?
   commissionAmount Float?     // Commission agent calculée à la validation
   validatedAt      DateTime?
@@ -222,20 +272,24 @@ model Sale {
   @@index([clientId])
   @@index([status])
   @@index([agentId])
+  @@index([isPendingDelivery])
 }
 
 model SaleItem {
-  id        String  @id @default(uuid())
+  id        String    @id @default(uuid())
   saleId    String
-  productId String
+  productId String?
+  bookId    String?
   quantity  Int
   unitPrice Float
 
-  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id])
+  book      Book?     @relation(fields: [bookId], references: [id])
 
   @@index([saleId])
   @@index([productId])
+  @@index([bookId])
 }
 
 model CashTransaction {
@@ -259,16 +313,19 @@ model CashTransaction {
 model CashTransactionLine {
   id            String          @id @default(uuid())
   transactionId String
-  productId     String
+  productId     String?
+  bookId        String?
   quantity      Int
   unitPrice     Float
   subTotal      Float
 
   transaction   CashTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  product       Product         @relation(fields: [productId], references: [id])
+  product       Product?        @relation(fields: [productId], references: [id])
+  book          Book?           @relation(fields: [bookId], references: [id])
 
   @@index([transactionId])
   @@index([productId])
+  @@index([bookId])
 }
 
 model Discount {
@@ -354,5 +411,243 @@ model CanalPlusSale {
   invoicePath        String?
   createdAt          DateTime @default(now())
   warehouse          Warehouse @relation(fields: [warehouseId], references: [id])
+}
+
+model ClassLevel {
+  id                 String   @id @default(uuid())
+  code               String   @unique // "PS", "MS", "GS", "CP", "CE1"... — franco/anglo prefixe: "FRA_CP" / "ANG_Form1"
+  name               String   // "Petite Section" / "Form 1"
+  system             String   // "FRANCOPHONE" | "ANGLOPHONE"
+  order              Int      // Ordre d'affichage
+  cycle              String   // "MATERNELLE" | "PRIMAIRE" | "SECONDAIRE"
+  color              String   // Code hexadécimal pour l'affichage, ex: "#FF6B6B"
+  icon               String   // Nom de l'icône lucide-react
+
+  books              Book[]
+  bookStocks         BookStock[]
+  bookSales          BookSale[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([system])
+  @@index([order])
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  code      String   @unique // "FRA_MATH" / "ANG_MATH"
+  name      String   // "Mathématiques" / "Mathematics"
+  system    String   // "FRANCOPHONE" | "ANGLOPHONE"
+  color     String   @default("#6366f1")
+
+  books     Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([system])
+}
+
+model Book {
+  id                 String   @id @default(uuid())
+  isbn               String?
+  title              String   // Titre du livre
+  author             String?
+  editor             String?  // Éditeur (Hatier, EDICEF, etc.)
+  year               String?  // Année scolaire/édition
+  price              Float    // Prix de vente
+  purchasePrice      Float?   // Prix d'achat
+  isOfficialProgram  Boolean  @default(true) // Livre au programme officiel national (Cameroun) ou hors-programme
+
+  isPacket           Boolean  @default(false)
+  itemsPerPacket     Int      @default(1)
+  unitSellingPrice   Float?
+
+  classLevelId       String
+  classLevel         ClassLevel @relation(fields: [classLevelId], references: [id])
+
+  subjectId          String?
+  subject            Subject?  @relation(fields: [subjectId], references: [id])
+
+  // Cahier d'activités lié (primaire surtout)
+  activityBookId     String?
+  activityBook       Book?     @relation("ActivityBook", fields: [activityBookId], references: [id])
+  linkedActivityBooks Book[]   @relation("ActivityBook")
+
+  imageUrl           String?
+
+  stocks             BookStock[]
+  saleItems          BookSaleItem[]
+  posSaleItems       SaleItem[]
+  posTransactionLines CashTransactionLine[]
+  stockMovements     StockMovement[]
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([classLevelId])
+  @@index([subjectId])
+  @@unique([title, classLevelId])
+}
+
+model BookStock {
+  id               String     @id @default(uuid())
+  bookId           String
+  warehouseId      String
+  classLevelId     String
+  quantity         Int        @default(0)
+  alertLimit       Int        @default(5)
+
+  book             Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  warehouse        Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  classLevel       ClassLevel @relation(fields: [classLevelId], references: [id])
+
+  @@unique([bookId, warehouseId])
+  @@index([warehouseId])
+  @@index([classLevelId])
+}
+
+model BookSale {
+  id               String        @id @default(uuid())
+  warehouseId      String
+  studentName      String?
+  className        String?       // Nom de la classe saisi (ex: "CP A")
+  classLevelId     String?       // Lien optionnel vers le niveau
+  totalAmount      Float
+  discount         Float         @default(0)
+  paymentMethod    String        // "ESPECES" | "CARTE_BANCAIRE" | "MOBILE_MONEY"
+  notes            String?
+
+  items            BookSaleItem[]
+  warehouse        Warehouse     @relation(fields: [warehouseId], references: [id])
+  classLevel       ClassLevel?   @relation(fields: [classLevelId], references: [id])
+
+  createdAt        DateTime      @default(now())
+
+  @@index([warehouseId])
+  @@index([createdAt])
+  @@index([classLevelId])
+}
+
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  supplierName String
+  warehouseId  String?
+  status       String              @default("EN_ATTENTE")
+  pdfPath      String?
+  totalAmount  Float               @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  warehouse    Warehouse?          @relation(fields: [warehouseId], references: [id])
+  items        PurchaseOrderItem[]
+
+  @@index([createdAt])
+  @@index([supplierName])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  productId       String
+  productName     String
+  productBarcode  String
+  quantity        Int
+  unitPrice       Float         @default(0)
+  currentStock    Int           @default(0)
+  alertLimit      Int           @default(0)
+  warehouseName   String
+  warehouseId     String
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model BookSaleItem {
+  id        String    @id @default(uuid())
+  saleId    String
+  bookId    String
+  quantity  Int
+  unitPrice Float     // Prix unitaire au moment de la vente (utile pour détachement packet)
+
+  sale      BookSale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  book      Book      @relation(fields: [bookId], references: [id])
+
+  @@index([saleId])
+  @@index([bookId])
+}
+
+model StockMovement {
+  id             String    @id @default(uuid())
+  productId      String?
+  bookId         String?
+  warehouseId    String
+  type           String    // 'VENTE' | 'ACHAT' | 'MAGASIN_ENTREE' | 'MAGASIN_SORTIE' | 'ANNULATION_VENTE' | 'AJUSTEMENT' | 'RETOUR'
+  quantity       Int       // Positif (entrée) ou négatif (sortie)
+  quantityBefore Int       @default(0)
+  quantityAfter  Int       @default(0)
+  unitCost       Float?    // Prix d'achat / coût de revient unitaire au moment du mouvement
+  referenceDoc   String?   // N° Facture, N° Bon de commande, etc.
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  product        Product?   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  book           Book?      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  warehouse      Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([bookId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model CashSession {
+  id                    String    @id @default(uuid())
+  warehouseId           String
+  userId                String?
+  openedAt              DateTime  @default(now())
+  closedAt              DateTime?
+  status                String    @default("OUVERTE") // 'OUVERTE' | 'CLOTUREE'
+  openingAmount         Float     @default(0)         // Fond de caisse initial
+  closingAmountExpected Float?    // Total calculé attendu en caisse
+  closingAmountActual   Float?    // Total compté physiquement par le caissier
+  difference            Float?    // Écart de caisse (actual - expected)
+  totalSales            Float     @default(0)
+  totalCashIn           Float     @default(0)
+  totalCashOut          Float     @default(0)
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  warehouse             Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  user                  User?     @relation(fields: [userId], references: [id])
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([openedAt])
+}
+
+model ScannedDocument {
+  id          String   @id @default(uuid())
+  title       String
+  date        String
+  filePath    String
+  fileType    String   @default("image/png")
+  category    String   @default("FACTURE")
+  notes       String?
+  warehouseId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([date])
 }
 

@@ -2,17 +2,26 @@ import { PrismaClient } from '@prisma/client'
 
 export function createClientService(prisma: PrismaClient) {
   return {
-    async search(query: string) {
+    async search(query: string, warehouseId?: string) {
       if (!query || query.length < 2) return []
+      const where: any = {
+        OR: [
+          { name: { contains: query } },
+          { email: { contains: query } },
+          { phone: { contains: query } }
+        ]
+      }
+      if (warehouseId) {
+        where.AND = [{ OR: [{ warehouseId }, { warehouseId: null }] }]
+      }
       const clients = await prisma.client.findMany({
-        where: {
-          OR: [
-            { name: { contains: query } },
-            { email: { contains: query } },
-            { phone: { contains: query } }
-          ]
+        where,
+        include: {
+          sales: {
+            where: { status: { not: 'ANNULE' }, ...(warehouseId ? { warehouseId } : {}) },
+            select: { finalTotal: true, createdAt: true }
+          }
         },
-        include: { sales: { select: { finalTotal: true, createdAt: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20
       })
@@ -27,9 +36,16 @@ export function createClientService(prisma: PrismaClient) {
       }))
     },
 
-    async getAllWithStats() {
+    async getAllWithStats(warehouseId?: string) {
+      const where: any = warehouseId ? { OR: [{ warehouseId }, { warehouseId: null }] } : {}
       const clients = await prisma.client.findMany({
-        include: { sales: { include: { warehouse: true, items: true } } },
+        where,
+        include: {
+          sales: {
+            where: { status: { not: 'ANNULE' }, ...(warehouseId ? { warehouseId } : {}) },
+            include: { warehouse: true, items: true }
+          }
+        },
         orderBy: { createdAt: 'desc' }
       })
 
@@ -65,15 +81,21 @@ export function createClientService(prisma: PrismaClient) {
       })
       if (!client) return null
 
-      const totalSpent = client.sales.reduce((s, sale) => s + sale.finalTotal, 0)
-      const lastPurchase = client.sales.length > 0 ? client.sales[0].createdAt : null
-      const rank = totalSpent > 0 ? (totalSpent > 50000 || client.sales.length >= 5 ? 'premium' as const : client.sales.length >= 2 ? 'fidele' as const : 'standard' as const) : 'standard' as const
+      const validSales = client.sales.filter(s => s.status !== 'ANNULE')
+      const totalSpent = validSales.reduce((s, sale) => s + sale.finalTotal, 0)
+      const lastPurchase = validSales.length > 0 ? validSales[0].createdAt : null
+      const rank = totalSpent > 0 ? (totalSpent > 50000 || validSales.length >= 5 ? 'premium' as const : validSales.length >= 2 ? 'fidele' as const : 'standard' as const) : 'standard' as const
 
-      return { client, totalSpent, purchaseCount: client.sales.length, rank, lastPurchase, sales: client.sales }
+      return { client, totalSpent, purchaseCount: validSales.length, rank, lastPurchase, sales: client.sales }
     },
 
-    async create(data: { name: string; email?: string; phone?: string; address?: string; notes?: string }) {
-      return prisma.client.create({ data })
+    async create(data: { name: string; email?: string; phone?: string; address?: string; notes?: string; warehouseId?: string }) {
+      const { warehouseId, ...rest } = data
+      const createData: any = { ...rest }
+      if (warehouseId) {
+        createData.warehouse = { connect: { id: warehouseId } }
+      }
+      return prisma.client.create({ data: createData })
     },
 
     async update(id: string, data: Partial<{ name: string; email: string; phone: string; address: string; notes: string }>) {

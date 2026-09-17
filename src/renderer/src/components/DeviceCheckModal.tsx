@@ -9,10 +9,10 @@ import {
 type DeviceType = 'scanner' | 'printer' | 'ticket'
 
 interface DeviceCheckModalProps {
-  open: boolean
+  open?: boolean
   onClose: () => void
-  device: DeviceType
-  onTest: () => Promise<boolean>
+  device: DeviceType | null
+  onTest?: () => Promise<boolean>
 }
 
 const DEVICE_LABELS: Record<DeviceType, { title: string; description: string; icon: typeof Barcode }> = {
@@ -36,10 +36,14 @@ const DEVICE_LABELS: Record<DeviceType, { title: string; description: string; ic
 export function DeviceCheckModal({ open, onClose, device, onTest }: DeviceCheckModalProps) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<boolean | null>(null)
+
+  if (!device) return null
+
   const info = DEVICE_LABELS[device]
   const Icon = info.icon
 
   async function handleTest() {
+    if (!onTest) return
     setTesting(true)
     setTestResult(null)
     const ok = await onTest()
@@ -53,7 +57,7 @@ export function DeviceCheckModal({ open, onClose, device, onTest }: DeviceCheckM
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
+    <Dialog open={open ?? false} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">

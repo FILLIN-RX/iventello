@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Activity, ShoppingCart, Package, Users, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { Activity, ShoppingCart, Package, Users, Wallet, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
 import { useEntrepotStore } from '../stores/entrepotStore'
 import type { SaleWithClient, Expense, CashTransactionWithLines } from '../../../shared/types'
 import { formatCurrency } from '@/lib/utils'
+
+const PAGE_SIZE = 30
 
 interface LogEntry {
   type: 'vente' | 'produit' | 'client' | 'depense' | 'caisse_entree' | 'caisse_sortie'
@@ -25,6 +27,8 @@ export default function ActivityLog() {
   const { selectedId: workspaceId } = useEntrepotStore()
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -91,9 +95,31 @@ export default function ActivityLog() {
       entries.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       setLogs(entries)
       setLoading(false)
+      // Reset pagination à chaque rechargement
+      setVisibleCount(PAGE_SIZE)
     }
     load()
   }, [workspaceId])
+
+  const visibleLogs = logs.slice(0, visibleCount)
+  const hasMore = visibleCount < logs.length
+
+  const loadMore = useCallback(() => {
+    setVisibleCount(prev => Math.min(prev + PAGE_SIZE, logs.length))
+  }, [logs.length])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore) loadMore()
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore])
 
   function formatTime(iso: string) {
     const d = new Date(iso)
@@ -133,39 +159,55 @@ export default function ActivityLog() {
       )}
 
       {!loading && logs.length > 0 && (
-        <div className="relative">
-          <div className="absolute left-[22px] top-0 bottom-0 w-px bg-border" />
+        <>
+          <div className="relative">
+            <div className="absolute left-[22px] top-0 bottom-0 w-px bg-border" />
 
-          <div className="space-y-1">
-            {logs.map((log, i) => {
-              const cfg = TYPE_CONFIG[log.type]
-              const Icon = cfg.icon
-              return (
-                <div key={i} className="relative flex gap-4 pb-4 animate-slide-in" style={{ animationDelay: `${i * 0.02}s` }}>
-                  <div className={`relative z-10 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg ${cfg.bg}`}>
-                    <Icon className={`h-5 w-5 ${cfg.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0 rounded-lg border bg-card px-4 py-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm">{log.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{log.sub}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        {log.amount !== undefined && (
-                          <p className={`text-sm font-bold whitespace-nowrap ${log.amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {log.amount >= 0 ? '+' : ''}{formatCurrency(log.amount)}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(log.time)}</p>
+            <div className="space-y-1">
+              {visibleLogs.map((log, i) => {
+                const cfg = TYPE_CONFIG[log.type]
+                const Icon = cfg.icon
+                return (
+                  <div key={i} className="relative flex gap-4 pb-4 animate-slide-in" style={{ animationDelay: `${Math.min(i, 10) * 0.02}s` }}>
+                    <div className={`relative z-10 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg ${cfg.bg}`}>
+                      <Icon className={`h-5 w-5 ${cfg.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0 rounded-lg border bg-card px-4 py-3 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm">{log.label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{log.sub}</p>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          {log.amount !== undefined && (
+                            <p className={`text-sm font-bold whitespace-nowrap ${log.amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {log.amount >= 0 ? '+' : ''}{formatCurrency(log.amount)}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(log.time)}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
+
+          {/* Sentinel infinite scroll */}
+          <div ref={sentinelRef} className="flex items-center justify-center py-4">
+            {hasMore ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Chargement… ({visibleCount} / {logs.length})</span>
+              </div>
+            ) : logs.length > PAGE_SIZE ? (
+              <p className="text-xs text-muted-foreground">
+                ✓ Tous les {logs.length} événements affichés
+              </p>
+            ) : null}
+          </div>
+        </>
       )}
     </div>
   )

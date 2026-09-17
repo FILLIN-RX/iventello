@@ -40,7 +40,7 @@ export function createMonthlyReportService(prisma: PrismaClient) {
         }
 
         for (const item of sale.items) {
-          const catName = item.product.category?.name ?? 'Autre'
+          const catName = item.product?.category?.name ?? 'Autre'
           categoriesSet.add(catName)
           const total = item.quantity * item.unitPrice
           salesByDay[day][catName] = (salesByDay[day][catName] ?? 0) + total

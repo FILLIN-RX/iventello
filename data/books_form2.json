@@ -1,0 +1,16 @@
+[
+  { "title": "Prime English Form 2", "author": "Egbe Besong, Mesei M.", "publisher": "NMI", "price": 3800, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ENG" },
+  { "title": "Going Home", "author": "Ethel Joffi Molua E.", "publisher": "NYAA Publ.", "price": 2000, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ENG" },
+  { "title": "An Introduction to Poetry, Vol. 2", "author": "Akem H., Ngwobella M.", "publisher": "Shiloh Printers", "price": 1200, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ENG" },
+  { "title": "A Time to Reconcile", "author": "George Njimele", "publisher": "Peacock", "price": 1200, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ENG" },
+  { "title": "French Form 2", "author": "Dady, Sanama, Kuetche", "publisher": "MONDOUX", "price": 3500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_FR" },
+  { "title": "Basic Keystones in History Form 2", "author": "V. Kum Ngwoh", "publisher": "Grace Publ.", "price": 4000, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_HIST" },
+  { "title": "Geography for Competency Development 2", "author": "Shey d. Edie Nnane", "publisher": "Greenworld", "price": 4000, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_GEO" },
+  { "title": "The Advocate for Citizenship Education Form 2", "author": "Venantius Kum Ngwoh", "publisher": "Grace Pub.", "price": 3500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_SCI" },
+  { "title": "Integrated Secondary Mathematics Book 2", "author": "Ajeck K., Siepe R., W.", "publisher": "Shiloh Printers", "price": 3500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_MATH" },
+  { "title": "Physics for Secondary Schools in Cameroon Form 2", "author": "Clinton Ojong", "publisher": "Longhorn", "price": 3500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_PHY" },
+  { "title": "Integrated Secondary Chemistry Form 2", "author": "Ajeck Blaise T.", "publisher": "Dominion", "price": 3000, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_CHEM" },
+  { "title": "Emerging Biology Book 2", "author": "Toulack K., Diang J.", "publisher": "Global Publ.", "price": 3000, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_BIO" },
+  { "title": "Contextual Home Economics Form 2", "author": "N.M. Brino", "publisher": "Grace Pub.", "price": 4500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ENG" },
+  { "title": "Computer Science for Form 2", "author": "Forndem F., Tangunu", "publisher": "Grassroots", "price": 3500, "classLevelCode": "ANG_FM2", "subjectCode": "ANG_ICT" }
+]

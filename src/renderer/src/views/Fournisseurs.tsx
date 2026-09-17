@@ -5,9 +5,12 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { feedback } from '../stores/feedbackStore'
+import { useEntrepotStore } from '../stores/entrepotStore'
 import type { Supplier } from '../../../shared/types'
 
 function Fournisseurs() {
+  const selectedWarehouseId = useEntrepotStore((s) => s.selectedId)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -16,10 +19,17 @@ function Fournisseurs() {
   const [saving, setSaving] = useState(false)
 
   async function load() {
-    try { setLoading(true); setSuppliers(await window.api.getSuppliers() as Supplier[]) }
-    catch { /* ignore */ } finally { setLoading(false) }
+    try {
+      setLoading(true)
+      const data = await window.api.getSuppliers(selectedWarehouseId || undefined) as Supplier[]
+      setSuppliers(data)
+    } catch (err: any) {
+      feedback.toast.error(err.message || 'Impossible de charger les fournisseurs')
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [selectedWarehouseId])
 
   function openCreate() { setEditing(null); setForm({ name: '', email: '', phone: '', address: '' }); setShowForm(true) }
   function openEdit(s: Supplier) { setEditing(s); setForm({ name: s.name, email: s.email ?? '', phone: s.phone ?? '', address: s.address ?? '' }); setShowForm(true) }
@@ -28,16 +38,42 @@ function Fournisseurs() {
     if (!form.name.trim()) return
     try {
       setSaving(true)
-      if (editing) await window.api.updateSupplier(editing.id, form)
-      else await window.api.createSupplier(form)
-      setShowForm(false); load()
-    } catch (err) { console.error(err) } finally { setSaving(false) }
+      if (editing) {
+        await window.api.updateSupplier(editing.id, form)
+        feedback.toast.success(`Fournisseur "${form.name}" mis à jour avec succès.`)
+      } else {
+        await window.api.createSupplier({
+          ...form,
+          warehouseId: selectedWarehouseId || undefined
+        })
+        feedback.toast.success(`Fournisseur "${form.name}" créé avec succès.`)
+      }
+      setShowForm(false)
+      load()
+    } catch (err: any) {
+      feedback.toast.error(err.message || 'Erreur lors de l\'enregistrement du fournisseur')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer ce fournisseur ? Les produits liés seront désassignés.')) return
-    try { await window.api.deleteSupplier(id); load() }
-    catch (err) { console.error(err) }
+  function handleDelete(id: string, name: string) {
+    feedback.confirm({
+      title: 'Supprimer ce fournisseur ?',
+      message: 'Les produits liés à ce fournisseur seront automatiquement désassignés.',
+      itemName: name,
+      confirmLabel: 'Supprimer le fournisseur',
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          await window.api.deleteSupplier(id)
+          feedback.toast.success(`Fournisseur "${name}" supprimé avec succès.`)
+          load()
+        } catch (err: any) {
+          feedback.toast.error(err.message || 'Erreur lors de la suppression')
+        }
+      }
+    })
   }
 
   return (
@@ -67,7 +103,7 @@ function Fournisseurs() {
                 </div>
                 <div className="mt-3 flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(s)}><Pencil className="mr-1 h-3 w-3" />Modifier</Button>
-                  <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleDelete(s.id)}><Trash2 className="mr-1 h-3 w-3" />Supprimer</Button>
+                  <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleDelete(s.id, s.name)}><Trash2 className="mr-1 h-3 w-3" />Supprimer</Button>
                 </div>
               </CardContent>
             </Card>

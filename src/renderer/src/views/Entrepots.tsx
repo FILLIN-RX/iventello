@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, Warehouse as WarehouseIcon, ArrowRight, ImageUp, X, Smartphone } from 'lucide-react'
+import { Plus, Pencil, Trash2, Store, ArrowRight, ImageUp, X, Smartphone, BookOpen } from 'lucide-react'
+import { toFileUrl } from '../../../shared/imageUtils'
 import { useWarehouses } from '../hooks/useWarehouses'
 import { useNavigate } from '../hooks/useNavigate'
 import { Button } from '../components/ui/button'
@@ -8,6 +9,7 @@ import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { feedback } from '../stores/feedbackStore'
 import type { Warehouse } from '../../../shared/types'
 
 function Entrepots() {
@@ -19,6 +21,7 @@ function Entrepots() {
   const [formLocation, setFormLocation] = useState('')
   const [formLogoUrl, setFormLogoUrl] = useState('')
   const [formMobileMoney, setFormMobileMoney] = useState(false)
+  const [formLibrairie, setFormLibrairie] = useState(false)
   const [saving, setSaving] = useState(false)
 
   function openCreate() {
@@ -27,6 +30,7 @@ function Entrepots() {
     setFormLocation('')
     setFormLogoUrl('')
     setFormMobileMoney(false)
+    setFormLibrairie(false)
     setShowForm(true)
   }
 
@@ -36,6 +40,7 @@ function Entrepots() {
     setFormLocation(w.location ?? '')
     setFormLogoUrl(w.logoUrl ?? '')
     setFormMobileMoney(w.mobileMoneyEnabled ?? false)
+    setFormLibrairie((w as any).librairieEnabled ?? false)
     setShowForm(true)
   }
 
@@ -57,49 +62,62 @@ function Entrepots() {
           name: formName.trim(),
           location: formLocation.trim() || undefined,
           logoUrl: formLogoUrl || undefined,
-          mobileMoneyEnabled: formMobileMoney
+          mobileMoneyEnabled: formMobileMoney,
+          librairieEnabled: formLibrairie
         })
+        feedback.toast.success(`Boutique "${formName.trim()}" modifiée`)
       } else {
         const wh = await window.api.createWarehouse({
           name: formName.trim(),
           location: formLocation.trim() || undefined,
-          mobileMoneyEnabled: formMobileMoney
+          mobileMoneyEnabled: formMobileMoney,
+          librairieEnabled: formLibrairie
         })
         if (formLogoUrl) {
           const saved = await window.api.saveLogo(formLogoUrl, wh.id)
           await window.api.updateWarehouse(wh.id, { logoUrl: saved })
         }
+        feedback.toast.success(`Boutique "${formName.trim()}" créée avec succès`)
       }
       setShowForm(false)
       refetch()
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      feedback.toast.error(err?.message || 'Erreur lors de l\'enregistrement de la boutique')
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer cet entrepôt ?')) return
-    try {
-      await window.api.deleteWarehouse(id)
-      refetch()
-    } catch (err) {
-      console.error(err)
-    }
+  function handleDelete(id: string, name: string) {
+    feedback.confirm({
+      title: 'Supprimer cette boutique ?',
+      message: 'Attention : tous les stocks et données associés à cette boutique seront impactés.',
+      itemName: name,
+      confirmLabel: 'Supprimer la boutique',
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          await window.api.deleteWarehouse(id)
+          feedback.toast.success(`Boutique "${name}" supprimée`)
+          refetch()
+        } catch (err: any) {
+          feedback.toast.error(err?.message || 'Erreur lors de la suppression')
+        }
+      }
+    })
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Entrepôts</h2>
-        <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Nouvel entrepôt</Button>
+        <h2 className="text-xl font-semibold">Boutiques</h2>
+        <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Nouvelle boutique</Button>
       </div>
 
       {loading && <p className="text-muted-foreground">Chargement...</p>}
       {error && <p className="text-destructive">Erreur : {error}</p>}
       {!loading && !error && warehouses.length === 0 && (
-        <p className="text-muted-foreground">Aucun entrepôt. Créez-en un pour organiser vos stocks.</p>
+        <p className="text-muted-foreground">Aucune boutique. Créez-en une pour organiser vos stocks et ventes.</p>
       )}
 
       {!loading && warehouses.length > 0 && (
@@ -111,16 +129,23 @@ function Entrepots() {
                   <div className="flex items-center gap-3">
                     {w.logoUrl ? (
                       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border bg-background">
-                        <img src={`local-file://${w.logoUrl}`} alt={w.name} className="h-full w-full object-contain" />
+                        <img src={toFileUrl(w.logoUrl)} alt={w.name} className="h-full w-full object-contain" />
                       </div>
                     ) : (
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <WarehouseIcon className="h-6 w-6 text-primary" />
+                        <Store className="h-6 w-6 text-primary" />
                       </div>
                     )}
                     <div>
                       <CardTitle className="text-lg">{w.name}</CardTitle>
                       {w.location && <p className="mt-0.5 text-xs text-muted-foreground">{w.location}</p>}
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(w as any).librairieEnabled && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                            <BookOpen className="h-2.5 w-2.5" /> Librairie
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -137,7 +162,7 @@ function Entrepots() {
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(w)}>
                     <Pencil className="mr-1 h-3 w-3" /> Modifier
                   </Button>
-                  <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleDelete(w.id)}>
+                  <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleDelete(w.id, w.name)}>
                     <Trash2 className="mr-1 h-3 w-3" /> Supprimer
                   </Button>
                 </div>
@@ -150,12 +175,12 @@ function Entrepots() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Modifier l'entrepôt" : 'Nouvel entrepôt'}</DialogTitle>
+            <DialogTitle>{editing ? "Modifier la boutique" : 'Nouvelle boutique'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="wh-name">Nom</Label>
-              <input id="wh-name" autoFocus value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Entrepôt principal" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm" />
+              <input id="wh-name" autoFocus value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Boutique principale" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="wh-location">Emplacement</Label>
@@ -166,7 +191,7 @@ function Entrepots() {
               <div className="flex items-center gap-3">
                 {formLogoUrl ? (
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-background">
-                    <img src={`local-file://${formLogoUrl}`} alt="Logo" className="h-full w-full object-contain" />
+                    <img src={toFileUrl(formLogoUrl)} alt="Logo" className="h-full w-full object-contain" />
                     <button onClick={() => setFormLogoUrl('')} className="absolute right-0 top-0 rounded-bl bg-background/80 p-0.5 text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
@@ -192,6 +217,18 @@ function Entrepots() {
                 </div>
               </div>
               <Switch checked={formMobileMoney} onCheckedChange={setFormMobileMoney} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Module Librairie Scolaire</p>
+                  <p className="text-[10px] text-muted-foreground">Gestion des livres par niveau et matière</p>
+                </div>
+              </div>
+              <Switch checked={formLibrairie} onCheckedChange={setFormLibrairie} />
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>

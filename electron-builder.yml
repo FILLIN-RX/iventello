@@ -1,26 +1,32 @@
 appId: com.iventello.stock-app
-productName: Gestion Stock & Caisse
+productName: Iventello
 publish:
   provider: github
   owner: FILLIN-RX
   repo: iventello
 directories:
   buildResources: build
-  output: dist
+  output: app-release
 
 files:
-  - 'out/**/*'
+  - out/**/*
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.*'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 
-asar: true
-asarUnpack:
-  - "**/*.node"
-  - "**/*.dll"
-  - "**/*.so"
-  - "**/*.dylib"
+asar: false
+
+# Fichiers runtime Electron manquants — copiés explicitement pour éviter le crash icu_util.cc
+extraFiles:
+  - from: "node_modules/electron/dist/icudtl.dat"
+    to: "icudtl.dat"
+  - from: "node_modules/electron/dist/resources.pak"
+    to: "resources.pak"
+  - from: "node_modules/electron/dist/v8_context_snapshot.bin"
+    to: "v8_context_snapshot.bin"
+  - from: "node_modules/electron/dist/vk_swiftshader.dll"
+    to: "vk_swiftshader.dll"
 
 extraResources:
   - from: "node_modules/@prisma/engines/"
@@ -31,8 +37,22 @@ extraResources:
 npmRebuild: false
 nodeGypRebuild: false
 
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: true
+  runAfterFinish: false
+  uninstallDisplayName: Iventello — Supprimer l'application et toutes les données
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+
+
 win:
-  icon: src/assets/iventello.png
+  icon: build/icon.ico
+  signtoolOptions:
+    sign: ./customSign.js
   target:
     - nsis
     - portable
+

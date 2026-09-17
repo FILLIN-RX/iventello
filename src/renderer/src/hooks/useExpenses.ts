@@ -1,23 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS } from '../lib/queryClient'
+import { useEntrepotStore } from '../stores/entrepotStore'
 import type { Expense } from '../../../shared/types'
 
-export function useExpenses() {
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function useExpenses(warehouseId?: string) {
+  const selectedWarehouseId = useEntrepotStore((s) => s.selectedId)
+  const targetWhId = warehouseId !== undefined ? warehouseId : (selectedWarehouseId || undefined)
 
-  const fetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setExpenses(await window.api.getExpenses() as Expense[])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur de chargement')
-    } finally {
-      setLoading(false)
+  const { data: expenses = [], isLoading: loading, error, refetch } = useQuery<Expense[]>({
+    queryKey: [...QUERY_KEYS.expenses, targetWhId],
+    queryFn: async () => {
+      const res = await window.api.getExpenses(targetWhId)
+      return (res || []) as Expense[]
     }
-  }, [])
+  })
 
-  useEffect(() => { fetch() }, [fetch])
-  return { expenses, loading, error, refetch: fetch }
+  return {
+    expenses,
+    loading,
+    error: error instanceof Error ? error.message : null,
+    refetch
+  }
 }

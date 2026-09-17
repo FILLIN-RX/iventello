@@ -179,7 +179,7 @@ export default function Rapports() {
       for (let d = 1; d <= days; d++) {
         const dayData = data.salesByDay[d]
         if (col === '__total') {
-          if (dayData) sum += Object.values(dayData).reduce((a: number, b: number) => a + b, 0)
+          if (dayData) sum += Object.values(dayData as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
         } else {
           sum += (dayData?.[col] ?? 0)
         }
@@ -315,11 +315,11 @@ export default function Rapports() {
     <h1>Rapport ${TABS.find((t) => t.id === tab)?.label} — ${periodLabel()}</h1>
     <h2 style="text-align:center;font-size:13px;font-weight:400;color:#64748b">${selectedName ?? ''}</h2>`
     if (tab === 'ventes') {
-      html += `<table><thead><tr><th>${isMonth ? 'Jour' : 'Période'}</th>${data.categories.map((c, i) => `<th class="cat-header" style="color:${catColors[i % catColors.length]}">${c}</th>`).join('')}<th>Total</th></tr></thead><tbody>`
+      html += `<table><thead><tr><th>${isMonth ? 'Jour' : 'Période'}</th>${data.categories.map((c: string, i: number) => `<th class="cat-header" style="color:${catColors[i % catColors.length]}">${c}</th>`).join('')}<th>Total</th></tr></thead><tbody>`
       for (const d of sortedDayKeys) {
-        html += `<tr><td>${rowLabel(d)}</td>${data.categories.map(c => `<td>${(data.salesByDay[d]?.[c] ?? 0).toLocaleString('fr-FR')}</td>`).join('')}<td>${totalSalesDay(d).toLocaleString('fr-FR')}</td></tr>`
+        html += `<tr><td>${rowLabel(d)}</td>${data.categories.map((c: string) => `<td>${(data.salesByDay[d]?.[c] ?? 0).toLocaleString('fr-FR')}</td>`).join('')}<td>${totalSalesDay(d).toLocaleString('fr-FR')}</td></tr>`
       }
-      html += `<tr class="total-row"><td>TOTAL</td>${data.categories.map(c => `<td>${total(c).toLocaleString('fr-FR')}</td>`).join('')}<td>${total('__total').toLocaleString('fr-FR')}</td></tr>`
+      html += `<tr class="total-row"><td>TOTAL</td>${data.categories.map((c: string) => `<td>${total(c).toLocaleString('fr-FR')}</td>`).join('')}<td>${total('__total').toLocaleString('fr-FR')}</td></tr>`
     } else {
       html += `<table><thead><tr><th>${isMonth ? 'Jour' : 'Période'}</th><th>Montant</th></tr></thead><tbody>`
       const periodData = tab === 'depenses' ? data.expensesByDay : tab === 'achats' ? data.purchasesByDay : data.discountsByDay
@@ -336,7 +336,7 @@ export default function Rapports() {
   }
 
   if (!selectedId) {
-    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez un entrepôt</div>
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Sélectionnez une boutique</div>
   }
 
   return (

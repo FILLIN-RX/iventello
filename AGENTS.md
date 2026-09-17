@@ -10,14 +10,18 @@
 ## Dev commands
 
 | Command | Purpose |
-|---|---|
+|---|---|---|
 | `npm run dev` | Launch electron-vite dev server |
 | `npm run build` | Production build |
 | `npm run prisma:push` | Push schema to SQLite |
 | `npm run prisma:studio` | Open Prisma Studio (DB GUI) |
 | `npm run prisma:generate` | Regen Prisma client after schema change |
-
-No lint, typecheck, or test commands configured — verified via `tsc` project references only.
+| `npm run test` | Run Vitest tests (1×) |
+| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run typecheck` | Full typecheck (tsc) |
+| `npm run typecheck:web` | Typecheck renderer only |
+| `npm run typecheck:node` | Typecheck main/preload only |
+| `npm run lint` | Typecheck with pretty output |
 
 ## Architecture
 

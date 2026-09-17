@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Package, Minus, Plus, RotateCw } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -32,7 +32,16 @@ export function ReapprovisionnementModal({ open, onClose, product, warehouseId, 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const currentStock = product?.stocks?.find((s) => s.warehouseId === warehouseId)
+  useEffect(() => {
+    if (product) {
+      setUnitPrice(product.basePrice ? product.basePrice.toString() : '0')
+      setQuantity(1)
+      setConsiderAsPurchase(false)
+      setError(null)
+    }
+  }, [product, open])
+
+  const currentStock = product?.stocks?.find((s) => s.warehouse.id === warehouseId)
 
   async function handleSubmit() {
     if (!product || !warehouseId) return

@@ -34,6 +34,7 @@ export function useDeviceCheck() {
         items: [{ product: { name: 'Test impression', price: 0 }, quantity: 1 }],
         totalAmount: 0,
         saleId: 'TEST',
+        invoiceNumber: 'TEST',
         date: new Date().toLocaleString('fr-FR')
       })
       return true

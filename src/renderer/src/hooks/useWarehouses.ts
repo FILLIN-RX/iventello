@@ -1,13 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { QUERY_KEYS } from '../lib/queryClient'
 import type { Warehouse } from '../../../shared/types'
 
 export function useWarehouses() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
-  const [loading, setLoading] = useState(true)
-  const fetch = useCallback(async () => {
-    try { setLoading(true); setWarehouses(await window.api.getWarehouses() as Warehouse[]) }
-    catch { /* ignore */ } finally { setLoading(false) }
-  }, [])
-  useEffect(() => { fetch() }, [fetch])
-  return { warehouses, loading, refetch: fetch }
+  const { data: warehouses = [], isLoading: loading, error, refetch } = useQuery<Warehouse[]>({
+    queryKey: QUERY_KEYS.warehouses,
+    queryFn: async () => {
+      const res = await window.api.getWarehouses()
+      return (res || []) as Warehouse[]
+    }
+  })
+
+  return {
+    warehouses,
+    loading,
+    error: error instanceof Error ? error.message : null,
+    refetch
+  }
 }

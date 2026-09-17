@@ -133,6 +133,36 @@ export const useNotifications = create<NotificationState>((set, get) => ({
           }
         })
       }
+
+      // Book stock alerts
+      const bookAlerts: { book: { id: string; title: string }; stock: { quantity: number; alertLimit: number; warehouse: { id: string; name: string } } }[] =
+        await window.api.getBookStockAlerts().catch(() => [])
+      const seenBooks = new Set(notifications.map((n) => n.meta?.bookId))
+
+      for (const a of bookAlerts) {
+        if (seenBooks.has(a.book.id)) continue
+        seenBooks.add(a.book.id)
+        const isCritical = a.stock.quantity <= 0
+        set((s) => {
+          const n: Notification = {
+            id: genId(),
+            type: isCritical ? 'stock_critique' : 'stock_alerte',
+            title: isCritical ? 'Rupture de stock (Livre)' : 'Stock faible (Livre)',
+            description: isCritical
+              ? `"${a.book.title}" est en rupture (0 en stock)`
+              : `"${a.book.title}" — ${a.stock.quantity} en stock, seuil: ${a.stock.alertLimit}`,
+            read: false,
+            createdAt: new Date(),
+            warehouseId: a.stock.warehouse.id,
+            warehouseName: a.stock.warehouse.name,
+            meta: { bookId: a.book.id, stock: a.stock.quantity, limit: a.stock.alertLimit, warehouse: a.stock.warehouse.name }
+          }
+          return {
+            notifications: [n, ...s.notifications].slice(0, 50),
+            unreadCount: s.notifications.filter((x) => !x.read).length + 1
+          }
+        })
+      }
     } catch {
       // ignore in dev
     }
