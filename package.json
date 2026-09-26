@@ -18,7 +18,9 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "server:dev": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
